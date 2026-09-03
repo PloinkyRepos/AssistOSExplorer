@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dpuData, resolveDpuBoxEndpoint } from './dpu-data.mjs';
+import path from 'node:path';
+
+import { smokeConfig } from './config.mjs';
+import { BOX_DPU_DATA_ROOT, dpuData, resolveDpuBoxEndpoint } from './dpu-data.mjs';
+
+test('DPU smoke fixtures use the canonical .data roots', () => {
+  if (!process.env.SMOKE_DPU_DATA_ROOT) {
+    assert.equal(
+      smokeConfig.dpuDataRoot,
+      path.join(smokeConfig.workspaceRoot || smokeConfig.repoRoot, '.data', 'dpu-data'),
+    );
+  }
+  assert.equal(BOX_DPU_DATA_ROOT, '/workspace/.data/dpu-data');
+});
 
 test('DPU evidence paths reject parent traversal before filesystem normalization', () => {
   for (const segments of [

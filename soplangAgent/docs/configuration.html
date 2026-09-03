@@ -37,7 +37,7 @@
                     <p>Main configuration file: <code>soplangAgent/manifest.json</code>.</p>
                     <pre><code>{
   "lite-sandbox": true,
-  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "container": "docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669",
   "profiles": {
     "default": {
       "env": ["ACHILLES_DEBUG"]
@@ -63,7 +63,7 @@
                             </tr>
                             <tr>
                                 <td><code>PERSISTENCE_FOLDER</code>, <code>LOGS_FOLDER</code>, <code>AUDIT_FOLDER</code></td>
-                                <td>Resolved by <code>soplang-tool.sh</code> below <code>$HOME/.soplang</code>, which is inside the agent's Ploinky-mounted persistent home. Explicit values remain supported.</td>
+                                <td>Resolved by <code>soplang-tool.sh</code> below <code>$HOME/.soplang</code>, which is inside the agent's Ploinky-mounted persistent home. Explicit values remain supported. Both <code>last-tool.log</code> and <code>achilles-debug.log</code> are written under <code>LOGS_FOLDER</code>; neither is written beside source code or in the current directory.</td>
                             </tr>
                             <tr>
                                 <td><code>SOPLANG_STATE_ROOT</code></td>

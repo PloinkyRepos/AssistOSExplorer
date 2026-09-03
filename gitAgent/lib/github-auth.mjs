@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import {
   getStoredGitToken,
@@ -13,7 +15,7 @@ const GITHUB_USER_URL = 'https://api.github.com/user';
 const GITHUB_EMAILS_URL = 'https://api.github.com/user/emails';
 const DEFAULT_CLIENT_ID = 'Ov23liRKJjJHqo3zOOI6';
 const DEFAULT_SCOPE = 'repo workflow read:user user:email';
-const STATE_DIR = path.join('.ploinky', 'state');
+const STATE_DIR = path.join('.data', 'gitAgent', 'github-auth');
 const STATE_FILE = 'git-agent-github-auth.json';
 const STATE_FILE_PREFIX = 'git-agent-github-auth';
 
@@ -33,33 +35,95 @@ export function getGithubAuthStateFilePath(workspaceRoot, authInfo = null) {
   return path.join(resolveWorkspaceRoot(workspaceRoot), STATE_DIR, fileName);
 }
 
-async function fileExists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
+function statePathPolicyError(message) {
+  const error = new Error(`GitHub auth data policy violation: ${message}`);
+  error.code = 'PLOINKY_AGENT_DATA_POLICY_VIOLATION';
+  error.statusCode = 422;
+  return error;
+}
+
+async function resolveStateFile(workspaceRoot, filePath, { createParent = false } = {}) {
+  const root = resolveWorkspaceRoot(workspaceRoot);
+  if (path.dirname(filePath) !== path.join(root, STATE_DIR)) {
+    throw statePathPolicyError('state files must stay inside the managed auth directory.');
   }
-}
-
-async function ensureParentDirectory(filePath) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-}
-
-async function readJsonFile(filePath, fallback) {
+  if (!(await fs.stat(root)).isDirectory()) {
+    throw statePathPolicyError('the workspace root must be a directory.');
+  }
+  let canonicalParent = await fs.realpath(root);
+  let currentPath = root;
+  for (const segment of STATE_DIR.split(path.sep)) {
+    currentPath = path.join(currentPath, segment);
+    let stats;
+    try {
+      stats = await fs.lstat(currentPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      if (!createParent) return filePath;
+      await fs.mkdir(currentPath, { mode: 0o700 }).catch((mkdirError) => {
+        if (mkdirError?.code !== 'EEXIST') throw mkdirError;
+      });
+      stats = await fs.lstat(currentPath);
+    }
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw statePathPolicyError('managed directories must be non-symlink directories.');
+    }
+    const canonicalPath = await fs.realpath(currentPath);
+    if (canonicalPath !== path.join(canonicalParent, segment)) {
+      throw statePathPolicyError('a managed directory escapes its workspace boundary.');
+    }
+    canonicalParent = canonicalPath;
+  }
+  let stats;
   try {
-    const raw = await fs.readFile(filePath, 'utf8');
+    stats = await fs.lstat(filePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return filePath;
+    throw error;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw statePathPolicyError('state and temporary files must be non-symlink regular files.');
+  }
+  if (await fs.realpath(filePath) !== path.join(canonicalParent, path.basename(filePath))) {
+    throw statePathPolicyError('a state file escapes its workspace boundary.');
+  }
+  return filePath;
+}
+
+async function readJsonFile(workspaceRoot, filePath, fallback) {
+  await resolveStateFile(workspaceRoot, filePath);
+  try {
+    const raw = await fs.readFile(filePath, {
+      encoding: 'utf8',
+      flag: fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+    });
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : fallback;
-  } catch {
-    return fallback;
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw statePathPolicyError('state files must not be symbolic links.');
+    if (error?.code === 'ENOENT' || error instanceof SyntaxError) return fallback;
+    throw error;
   }
 }
 
-async function writeJsonFile(filePath, value) {
-  await ensureParentDirectory(filePath);
-  const tempPath = `${filePath}.tmp`;
-  await fs.writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+async function writeJsonFile(workspaceRoot, filePath, value) {
+  await resolveStateFile(workspaceRoot, filePath, { createParent: true });
+  const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await resolveStateFile(workspaceRoot, tempPath);
+  try {
+    await fs.writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW,
+      mode: 0o600
+    });
+  } catch (error) {
+    if (error?.code === 'ELOOP' || error?.code === 'EEXIST') {
+      throw statePathPolicyError('temporary files must be newly created, non-symlink files.');
+    }
+    throw error;
+  }
+  await resolveStateFile(workspaceRoot, filePath);
+  await resolveStateFile(workspaceRoot, tempPath);
   await fs.rename(tempPath, filePath);
 }
 
@@ -129,7 +193,7 @@ function stripAccessToken(connection) {
 }
 
 async function loadState(workspaceRoot, authInfo = null) {
-  const state = await readJsonFile(getGithubAuthStateFilePath(workspaceRoot, authInfo), {});
+  const state = await readJsonFile(workspaceRoot, getGithubAuthStateFilePath(workspaceRoot, authInfo), {});
   const pending = sanitizePending(state.pending);
   const connection = sanitizeConnection(state.connection);
   const nextState = {
@@ -146,7 +210,7 @@ async function loadState(workspaceRoot, authInfo = null) {
 }
 
 async function saveState(workspaceRoot, state, authInfo = null) {
-  await writeJsonFile(getGithubAuthStateFilePath(workspaceRoot, authInfo), {
+  await writeJsonFile(workspaceRoot, getGithubAuthStateFilePath(workspaceRoot, authInfo), {
     pending: sanitizePending(state?.pending),
     connection: sanitizeConnection(state?.connection)
   });
@@ -393,12 +457,14 @@ export async function pollGithubDeviceFlow({ workspaceRoot, authInfo } = {}) {
     })
   };
 
+  await resolveStateFile(workspaceRoot, getGithubAuthStateFilePath(workspaceRoot, authInfo));
   await putStoredGitToken({ workspaceRoot, authInfo, token: accessToken });
   await saveState(workspaceRoot, nextState, authInfo);
   return buildStatusPayload(setup, nextState, { tokenStored: true });
 }
 
 export async function disconnectGithubAuth({ workspaceRoot, authInfo } = {}) {
+  await resolveStateFile(workspaceRoot, getGithubAuthStateFilePath(workspaceRoot, authInfo));
   const setup = await getGithubSetup(workspaceRoot);
   const nextState = {
     pending: null,
@@ -418,6 +484,7 @@ export async function storeManualGitAuthToken({ workspaceRoot, authInfo, token }
   if (!clean) {
     throw new Error('Token is required.');
   }
+  await resolveStateFile(workspaceRoot, getGithubAuthStateFilePath(workspaceRoot, authInfo));
   await putStoredGitToken({ workspaceRoot, authInfo, token: clean });
   const setup = await getGithubSetup(workspaceRoot);
   const state = await loadState(workspaceRoot, authInfo);

@@ -24,7 +24,7 @@ This specification defines the active DS010-skill-webassist-session contract for
 - `contactInformation`
 
 ### Guarantees
-- Writes only to `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku/`.
+- Writes only to `$WEBASSIST_DATA_ROOT/sites/<siteId>/.aku/`.
 - Does not write legacy session markdown files.
 - Uses the runtime `updateSessionProfile` function.
 - Does not call the LLM.

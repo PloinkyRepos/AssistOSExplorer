@@ -24,6 +24,7 @@ import {
   parseMarkdownState,
   serializeMarkdownContent
 } from './markdown-crdt-model.mjs';
+import { createExplorerPrivateDataBoundary } from '../private-data-boundary.mjs';
 
 const EXCLUDED_WORKSPACE_FOLDERS = new Set(['.data', '.git', '.ploinky', 'node_modules']);
 const MAX_COLLABORATION_CHANGES = 128;
@@ -36,10 +37,10 @@ export function createScriptaCrdtService({
   validatePath,
   markdownCrdtStore
 }) {
+  const privateData = createExplorerPrivateDataBoundary({ fs, path, workspaceRoot });
   const collaborationRoot = path.join(
     workspaceRoot,
-    '.ploinky',
-    'data',
+    '.data',
     'explorer',
     'automerge',
     'scripta-collaboration'
@@ -76,13 +77,16 @@ export function createScriptaCrdtService({
     return id;
   }
 
-  function collaborationPath(documentId) {
-    return path.join(collaborationRoot, `${safeDocumentId(documentId)}.automerge`);
+  async function collaborationPath(documentId, { createParent = false } = {}) {
+    return privateData.resolveFile([
+      'automerge',
+      'scripta-collaboration',
+      `${safeDocumentId(documentId)}.automerge`
+    ], { createParent });
   }
 
   async function writeCollaborationDocument(documentId, document) {
-    await fs.mkdir(collaborationRoot, { recursive: true });
-    const target = collaborationPath(documentId);
+    const target = await collaborationPath(documentId, { createParent: true });
     const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
     try {
       await fs.writeFile(temporary, Buffer.from(saveDocument(document)));
@@ -94,7 +98,7 @@ export function createScriptaCrdtService({
 
   async function readCollaborationDocument(documentId) {
     try {
-      return loadDocument(await fs.readFile(collaborationPath(documentId)));
+      return loadDocument(await fs.readFile(await collaborationPath(documentId)));
     } catch (error) {
       if (error?.code === 'ENOENT') return null;
       throw error;
@@ -102,7 +106,7 @@ export function createScriptaCrdtService({
   }
 
   async function removeCollaborationDocument(documentId) {
-    await fs.rm(collaborationPath(documentId), { force: true });
+    await fs.rm(await collaborationPath(documentId), { force: true });
   }
 
   function reconcilePublicObject(draft, next, root = draft, objectPath = []) {
@@ -672,7 +676,7 @@ export function createScriptaCrdtService({
         path: args.path,
         relatedArtifacts: [{
           name: 'collaboration.automerge',
-          path: collaborationPath(documentId),
+          path: await collaborationPath(documentId),
           optional: true
         }]
       });

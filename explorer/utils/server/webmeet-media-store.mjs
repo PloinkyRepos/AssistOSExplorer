@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 const MAX_ASSET_BYTES = 15 * 1024 * 1024;
 const BLOB_ID_RE = /^[a-f0-9]{48}$/;
 const SAFE_ID_RE = /^[a-zA-Z0-9_.:-]+$/;
+const SAFE_AGENT_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 function jpegSize(buffer) {
   let offset = 2;
@@ -128,8 +129,14 @@ function validateBlobRef(blobRef, expectedAgent) {
   const agent = String(blobRef?.agent || '').trim();
   const localPath = String(blobRef?.localPath || '').trim();
   if (!BLOB_ID_RE.test(id)) throw new Error('Invalid Explorer blob id.');
+  if (!SAFE_AGENT_RE.test(expectedAgent) || expectedAgent === '.' || expectedAgent === '..') {
+    throw new Error('Explorer blob storage requires a short agent name.');
+  }
+  if (!SAFE_AGENT_RE.test(agent) || agent === '.' || agent === '..') {
+    throw new Error('The staged blob agent must be a short agent name.');
+  }
   if (agent !== expectedAgent) throw new Error('The staged blob belongs to a different agent.');
-  if (localPath !== `blobs/${id}`) throw new Error('The staged blob path does not match its id.');
+  if (localPath !== `.data/${agent}/blobs/${id}`) throw new Error('The staged blob path does not match its id.');
   return { id, localPath };
 }
 

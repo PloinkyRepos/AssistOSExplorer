@@ -21,8 +21,9 @@ import {
   updateMarkdownModelInDraft,
   writeMarkdownModelToDraft
 } from './markdown-crdt-model.mjs';
+import { createExplorerPrivateDataBoundary } from '../private-data-boundary.mjs';
 
-const STORE_ROOT = ['.ploinky', 'data', 'explorer', 'automerge', 'documents'];
+const STORE_ROOT = ['.data', 'explorer', 'automerge', 'documents'];
 const DELETION_ROOT = 'pending-deletions';
 const STORE_LOCK_DIRECTORY = '.locks';
 const STORE_LOCK_TIMEOUT_MS = 10_000;
@@ -391,7 +392,7 @@ export function createMarkdownCrdtStore({
   transactionStaleMs = TRANSACTION_STALE_MS
 }) {
   const storeRoot = path.join(workspaceRoot, ...STORE_ROOT);
-  const deletionRoot = path.join(storeRoot, DELETION_ROOT);
+  const privateData = createExplorerPrivateDataBoundary({ fs, path, workspaceRoot });
   const localLocks = new Map();
   let recoveryPromise = null;
 
@@ -487,8 +488,11 @@ export function createMarkdownCrdtStore({
   }
 
   async function acquireDocumentLock(scope) {
-    const lockPath = lockPathForScope(scope);
-    await fs.mkdir(path.dirname(lockPath), { recursive: true });
+    const lexicalLockPath = lockPathForScope(scope);
+    const lockPath = await privateData.resolveFile(
+      ['automerge', 'documents', STORE_LOCK_DIRECTORY, path.basename(lexicalLockPath)],
+      { createParent: true }
+    );
     const startedAt = Date.now();
     const token = crypto.randomUUID();
     while (true) {
@@ -578,18 +582,23 @@ export function createMarkdownCrdtStore({
   }
 
   async function readAutomergeState(documentId) {
-    const statePath = statePathForDocumentId(documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(documentId))
+    ]);
     if (!await pathExists(fs, statePath)) return null;
     const binary = await fs.readFile(statePath);
     return loadDocument(binary);
   }
 
   async function readAutomergeStateByPath(validPath) {
-    if (!await pathExists(fs, storeRoot)) return null;
-    const entries = await fs.readdir(storeRoot);
+    const safeStoreRoot = await privateData.resolveDirectory(['automerge', 'documents']);
+    if (!await pathExists(fs, safeStoreRoot)) return null;
+    const entries = await fs.readdir(safeStoreRoot);
     for (const entry of entries) {
       if (!entry.endsWith('.automerge')) continue;
-      const statePath = path.join(storeRoot, entry);
+      const statePath = await privateData.resolveFile(['automerge', 'documents', entry]);
       const document = loadDocument(await fs.readFile(statePath));
       if (document?.path === validPath) {
         return document;
@@ -599,8 +608,11 @@ export function createMarkdownCrdtStore({
   }
 
   async function writeAutomergeState(document) {
-    await fs.mkdir(storeRoot, { recursive: true });
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const temporary = `${statePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
     try {
       await fs.writeFile(temporary, Buffer.from(saveDocument(document)));
@@ -662,7 +674,11 @@ export function createMarkdownCrdtStore({
       draft.updatedAt = new Date().toISOString();
     });
     const markdown = markdownFromDocument(document);
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const previousState = await fs.readFile(statePath).catch((error) => {
       if (error?.code === 'ENOENT') return null;
       throw error;
@@ -830,7 +846,11 @@ export function createMarkdownCrdtStore({
     }
     const model = ensureDocumentId(args.model || {});
     const documentId = documentIdFromState(model);
-    const statePath = statePathForDocumentId(documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(documentId))
+    ], { createParent: true });
     const temporaryMarkdown = `${validPath}.${process.pid}.${crypto.randomUUID()}.scripta-create.tmp`;
     let response = null;
     try {
@@ -980,7 +1000,11 @@ export function createMarkdownCrdtStore({
     if (!isMarkdownPath(validPath, path)) {
       throw new Error('Markdown CRDT tools only support .md files.');
     }
-    const statePath = statePathForDocumentId(document.documentId);
+    const statePath = await privateData.resolveFile([
+      'automerge',
+      'documents',
+      path.basename(statePathForDocumentId(document.documentId))
+    ], { createParent: true });
     const [previousMarkdown, previousState] = await Promise.all([
       fs.readFile(validPath, 'utf8'),
       fs.readFile(statePath).catch((error) => error?.code === 'ENOENT' ? null : Promise.reject(error))
@@ -1132,23 +1156,47 @@ export function createMarkdownCrdtStore({
     });
   }
 
-  function deletionPath(transactionId) {
+  function deletionSegments(transactionId) {
     const safeId = normalizeDocumentId(transactionId);
     if (!safeId || safeId !== String(transactionId || '')) {
       throw new Error('Invalid SCRIPTA deletion transaction id.');
     }
-    return path.join(deletionRoot, safeId);
+    return ['automerge', 'documents', DELETION_ROOT, safeId];
+  }
+
+  function deletionDirectory(transactionId, options) {
+    return privateData.resolveDirectory(deletionSegments(transactionId), options);
+  }
+
+  function deletionFile(transactionId, fileName) {
+    return privateData.resolveFile([...deletionSegments(transactionId), fileName]);
+  }
+
+  async function validateDeletionFiles(transactionId, relatedArtifacts = []) {
+    for (const fileName of ['transaction.json', 'document.md', 'document.automerge', ...relatedArtifacts.map(({ name }) => name)]) {
+      await deletionFile(transactionId, fileName);
+    }
+  }
+
+  async function removeDeletionDirectory(transactionId, relatedArtifacts = []) {
+    const expectedNames = new Set(['transaction.json', 'document.md', 'document.automerge', ...relatedArtifacts.map(({ name }) => name)]);
+    const entries = await fs.readdir(await deletionDirectory(transactionId));
+    for (const entry of entries) {
+      if (!expectedNames.has(entry)) throw new Error('Unexpected SCRIPTA deletion artifact.');
+      await deletionFile(transactionId, entry);
+    }
+    await fs.rm(await deletionDirectory(transactionId), { recursive: true, force: true });
   }
 
   function normalizeRelatedArtifact(artifact = {}) {
     const name = String(artifact.name || '').trim();
-    if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9_.-]+$/.test(name) || ['.', '..', 'transaction.json', 'document.md', 'document.automerge'].includes(name)) {
       throw new Error('Invalid related SCRIPTA artifact name.');
     }
     const sourcePath = path.resolve(String(artifact.path || ''));
-    const relative = path.relative(path.resolve(workspaceRoot), sourcePath);
+    const relative = path.relative(privateData.privateRoot, sourcePath);
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error('Related SCRIPTA artifacts must be inside the workspace.');
+      throw new Error('Related SCRIPTA artifacts must be inside Explorer private data.');
     }
     return {
       name,
@@ -1157,58 +1205,82 @@ export function createMarkdownCrdtStore({
     };
   }
 
+  function relatedArtifactFile(artifact, options) {
+    return privateData.resolveFile(path.relative(privateData.privateRoot, artifact.sourcePath).split(path.sep), options);
+  }
+
   async function prepareRemove(args) {
     const scope = await lockScopeForArgs(args);
     return withCrdtLock(scope, async () => {
+      await privateData.resolveDirectory(['automerge', 'documents', DELETION_ROOT]);
       const document = args.documentId
         ? await loadByDocumentId(args.documentId)
         : await loadByPath(args.path);
       const documentId = normalizeDocumentId(document.documentId);
       const validPath = await validatePath(document.path);
       const transactionId = normalizeDocumentId(generateId('scripta-delete'));
-      const transactionDir = deletionPath(transactionId);
-      const stagedMarkdown = path.join(transactionDir, 'document.md');
-      const stagedState = path.join(transactionDir, 'document.automerge');
-      const statePath = statePathForDocumentId(documentId);
+      const stateSegments = [
+        'automerge',
+        'documents',
+        path.basename(statePathForDocumentId(documentId))
+      ];
+      await privateData.resolveFile(stateSegments, { createParent: true });
       const relatedArtifacts = (Array.isArray(args.relatedArtifacts) ? args.relatedArtifacts : [])
         .map(normalizeRelatedArtifact);
-      await fs.mkdir(transactionDir, { recursive: true });
+      if (new Set(relatedArtifacts.map(({ name }) => name)).size !== relatedArtifacts.length) {
+        throw new Error('Duplicate related SCRIPTA artifact name.');
+      }
+      for (const artifact of relatedArtifacts) await relatedArtifactFile(artifact);
+      if (await pathExists(fs, await deletionDirectory(transactionId))) {
+        throw new Error('SCRIPTA deletion transaction already exists.');
+      }
+      await deletionDirectory(transactionId, { create: true });
+      await validateDeletionFiles(transactionId, relatedArtifacts);
       let markdownMoved = false;
       let stateMoved = false;
       const movedRelatedArtifacts = [];
       try {
-        await fs.rename(validPath, stagedMarkdown);
+        await fs.rename(validPath, await deletionFile(transactionId, 'document.md'));
         markdownMoved = true;
-        await fs.rename(statePath, stagedState);
+        await fs.rename(await privateData.resolveFile(stateSegments), await deletionFile(transactionId, 'document.automerge'));
         stateMoved = true;
         for (const artifact of relatedArtifacts) {
-          const exists = await pathExists(fs, artifact.sourcePath);
+          const exists = await pathExists(fs, await relatedArtifactFile(artifact));
           if (!exists && !artifact.optional) {
             throw new Error(`Required SCRIPTA artifact '${artifact.name}' was not found.`);
           }
           if (!exists) continue;
-          const stagedPath = path.join(transactionDir, artifact.name);
-          await fs.rename(artifact.sourcePath, stagedPath);
+          await fs.rename(await relatedArtifactFile(artifact), await deletionFile(transactionId, artifact.name));
           movedRelatedArtifacts.push({
             name: artifact.name,
             sourcePath: artifact.sourcePath
           });
         }
-        await fs.writeFile(path.join(transactionDir, 'transaction.json'), JSON.stringify({
+        await fs.writeFile(await deletionFile(transactionId, 'transaction.json'), JSON.stringify({
           transactionId,
           documentId,
           path: validPath,
           preparedAt: new Date().toISOString(),
           relatedArtifacts: movedRelatedArtifacts
-        }));
+        }), { flag: 'wx' });
       } catch (error) {
+        let restored = true;
         for (const artifact of [...movedRelatedArtifacts].reverse()) {
-          await fs.mkdir(path.dirname(artifact.sourcePath), { recursive: true }).catch(() => {});
-          await fs.rename(path.join(transactionDir, artifact.name), artifact.sourcePath).catch(() => {});
+          try {
+            await fs.rename(await deletionFile(transactionId, artifact.name), await relatedArtifactFile(artifact, { createParent: true }));
+          } catch { restored = false; }
         }
-        if (stateMoved) await fs.rename(stagedState, statePath).catch(() => {});
-        if (markdownMoved) await fs.rename(stagedMarkdown, validPath).catch(() => {});
-        await fs.rm(transactionDir, { recursive: true, force: true }).catch(() => {});
+        if (stateMoved) {
+          try {
+            await fs.rename(await deletionFile(transactionId, 'document.automerge'), await privateData.resolveFile(stateSegments));
+          } catch { restored = false; }
+        }
+        if (markdownMoved) {
+          try {
+            await fs.rename(await deletionFile(transactionId, 'document.md'), await validatePath(validPath));
+          } catch { restored = false; }
+        }
+        if (restored) await removeDeletionDirectory(transactionId, relatedArtifacts).catch(() => {});
         throw error;
       }
       invalidateCachesForPath(validPath);
@@ -1217,17 +1289,21 @@ export function createMarkdownCrdtStore({
   }
 
   async function readDeletionTransaction(transactionId) {
-    const transactionDir = deletionPath(transactionId);
-    const raw = await fs.readFile(path.join(transactionDir, 'transaction.json'), 'utf8');
-    return { transactionDir, transaction: JSON.parse(raw) };
+    const raw = await fs.readFile(await deletionFile(transactionId, 'transaction.json'), 'utf8');
+    const transaction = JSON.parse(raw);
+    if (transaction?.transactionId !== transactionId) throw new Error('Mismatched SCRIPTA deletion transaction id.');
+    transaction.relatedArtifacts = (Array.isArray(transaction.relatedArtifacts) ? transaction.relatedArtifacts : [])
+      .map((artifact) => normalizeRelatedArtifact({ ...artifact, path: artifact.sourcePath }));
+    await validateDeletionFiles(transactionId, transaction.relatedArtifacts);
+    return { transactionDir: await deletionDirectory(transactionId), transaction };
   }
 
   async function commitRemove(args) {
     const initial = await readDeletionTransaction(args.transactionId);
     const scope = await lockScopeForPath(initial.transaction.path);
     return withCrdtLock(scope, async () => {
-      const { transactionDir, transaction } = await readDeletionTransaction(args.transactionId);
-      await fs.rm(transactionDir, { recursive: true, force: true });
+      const { transaction } = await readDeletionTransaction(args.transactionId);
+      await removeDeletionDirectory(args.transactionId, transaction.relatedArtifacts);
       return {
         ok: true,
         documentId: transaction.documentId,
@@ -1241,46 +1317,50 @@ export function createMarkdownCrdtStore({
     const initial = await readDeletionTransaction(args.transactionId);
     const scope = await lockScopeForPath(initial.transaction.path);
     return withCrdtLock(scope, async () => {
-      const { transactionDir, transaction } = await readDeletionTransaction(args.transactionId);
+      const { transaction } = await readDeletionTransaction(args.transactionId);
       const validPath = await validatePath(transaction.path);
-      const statePath = statePathForDocumentId(transaction.documentId);
+      const statePath = await privateData.resolveFile([
+        'automerge',
+        'documents',
+        path.basename(statePathForDocumentId(transaction.documentId))
+      ], { createParent: true });
       if (await pathExists(fs, validPath) || await pathExists(fs, statePath)) {
         throw new Error('Cannot roll back SCRIPTA deletion because the destination already exists.');
       }
+      for (const artifact of transaction.relatedArtifacts) {
+        if (await pathExists(fs, await relatedArtifactFile(artifact))) {
+          throw new Error(`Cannot restore SCRIPTA artifact '${artifact.name}' because the destination exists.`);
+        }
+      }
       await fs.mkdir(path.dirname(validPath), { recursive: true });
-      await fs.rename(path.join(transactionDir, 'document.md'), validPath);
+      await fs.rename(await deletionFile(args.transactionId, 'document.md'), await validatePath(validPath));
       try {
-        await fs.rename(path.join(transactionDir, 'document.automerge'), statePath);
+        const destination = await privateData.resolveFile(['automerge', 'documents', path.basename(statePath)]);
+        await fs.rename(await deletionFile(args.transactionId, 'document.automerge'), destination);
       } catch (error) {
-        await fs.rename(validPath, path.join(transactionDir, 'document.md')).catch(() => {});
+        await deletionFile(args.transactionId, 'document.md')
+          .then((stagedPath) => fs.rename(validPath, stagedPath)).catch(() => {});
         throw error;
       }
       const restoredRelatedArtifacts = [];
       try {
-        for (const artifact of Array.isArray(transaction.relatedArtifacts) ? transaction.relatedArtifacts : []) {
-          const normalized = normalizeRelatedArtifact({
-            name: artifact.name,
-            path: artifact.sourcePath
-          });
-          if (await pathExists(fs, normalized.sourcePath)) {
-            throw new Error(`Cannot restore SCRIPTA artifact '${normalized.name}' because the destination exists.`);
-          }
-          await fs.mkdir(path.dirname(normalized.sourcePath), { recursive: true });
-          await fs.rename(path.join(transactionDir, normalized.name), normalized.sourcePath);
-          restoredRelatedArtifacts.push(normalized);
+        for (const artifact of transaction.relatedArtifacts) {
+          const destination = await relatedArtifactFile(artifact, { createParent: true });
+          await fs.rename(await deletionFile(args.transactionId, artifact.name), destination);
+          restoredRelatedArtifacts.push(artifact);
         }
       } catch (error) {
         for (const artifact of [...restoredRelatedArtifacts].reverse()) {
-          await fs.rename(
-            artifact.sourcePath,
-            path.join(transactionDir, artifact.name)
-          ).catch(() => {});
+          await deletionFile(args.transactionId, artifact.name)
+            .then(async (stagedPath) => fs.rename(await relatedArtifactFile(artifact), stagedPath)).catch(() => {});
         }
-        await fs.rename(statePath, path.join(transactionDir, 'document.automerge')).catch(() => {});
-        await fs.rename(validPath, path.join(transactionDir, 'document.md')).catch(() => {});
+        await deletionFile(args.transactionId, 'document.automerge')
+          .then(async (stagedPath) => fs.rename(await privateData.resolveFile(['automerge', 'documents', path.basename(statePath)]), stagedPath)).catch(() => {});
+        await deletionFile(args.transactionId, 'document.md')
+          .then((stagedPath) => fs.rename(validPath, stagedPath)).catch(() => {});
         throw error;
       }
-      await fs.rm(transactionDir, { recursive: true, force: true });
+      await removeDeletionDirectory(args.transactionId, transaction.relatedArtifacts);
       invalidateCachesForPath(validPath);
       return {
         ok: true,
@@ -1293,22 +1373,29 @@ export function createMarkdownCrdtStore({
 
   async function recoverPendingDeletions() {
     const staleAfterMs = Math.max(0, Number(transactionStaleMs) || TRANSACTION_STALE_MS);
-    const entries = await fs.readdir(deletionRoot, { withFileTypes: true }).catch((error) => {
+    const safeDeletionRoot = await privateData.resolveDirectory(
+      ['automerge', 'documents', DELETION_ROOT]
+    );
+    const entries = await fs.readdir(safeDeletionRoot, { withFileTypes: true }).catch((error) => {
       if (error?.code === 'ENOENT') return [];
       throw error;
     });
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
       const transactionId = entry.name;
-      const prepared = await readDeletionTransaction(transactionId).catch(() => null);
+      const prepared = await readDeletionTransaction(transactionId).catch((error) => {
+        if (error?.code === 'PLOINKY_AGENT_DATA_POLICY_VIOLATION') throw error;
+        return null;
+      });
       if (!prepared) continue;
       const preparedAt = Date.parse(prepared.transaction?.preparedAt || '');
-      const stats = await fs.stat(prepared.transactionDir).catch(() => null);
+      const stats = await fs.stat(await deletionDirectory(transactionId)).catch(() => null);
       const ageMs = Number.isFinite(preparedAt)
         ? Date.now() - preparedAt
         : stats ? Date.now() - stats.mtimeMs : 0;
       if (ageMs <= staleAfterMs) continue;
-      await rollbackRemove({ transactionId }).catch(() => {
+      await rollbackRemove({ transactionId }).catch((error) => {
+        if (error?.code === 'PLOINKY_AGENT_DATA_POLICY_VIOLATION') throw error;
         // A live owner or an occupied destination means recovery must be
         // retried by a later process rather than deleting staged data.
       });
@@ -1316,6 +1403,7 @@ export function createMarkdownCrdtStore({
   }
 
   async function ensureRecovered() {
+    await privateData.resolveDirectory(['automerge', 'documents'], { create: true });
     if (!recoveryPromise) recoveryPromise = recoverPendingDeletions();
     return recoveryPromise;
   }
@@ -1375,8 +1463,14 @@ export function createMarkdownCrdtStore({
       await ensureRecovered();
       return prepareRemove(args);
     },
-    commitRemove,
-    rollbackRemove,
+    commitRemove: async (args) => {
+      await ensureRecovered();
+      return commitRemove(args);
+    },
+    rollbackRemove: async (args) => {
+      await ensureRecovered();
+      return rollbackRemove(args);
+    },
     inspect: async (args, operation) => {
       await ensureRecovered();
       return inspect(args, operation);

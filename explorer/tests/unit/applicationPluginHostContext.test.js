@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    attachApplicationPluginHost,
     buildPluginContext,
     getApplicationPluginsForSlot,
     waitForPluginPresenterRender
@@ -92,5 +93,51 @@ describe('application plugin host context', () => {
         resolveActiveRender();
         await waiting;
         assert.equal(completed, true);
+    });
+
+    it('refreshes discovered menu metadata without closing the active menu or rebuilding it at mount readiness', async () => {
+        const listeners = new Map();
+        let closeCalls = 0;
+        let entryRenderCalls = 0;
+        let toolbarRefreshCalls = 0;
+        globalThis.window = {
+            assistOS: {
+                workspace: { appPlugins: {} },
+                pluginSettings: {}
+            }
+        };
+        const fileExp = {
+            element: null,
+            toolbarMenuItems: [{ id: 'stale' }],
+            setWindowListener(key, eventName, handler) {
+                listeners.set(eventName, handler);
+            },
+            closeActionMenu() {
+                closeCalls += 1;
+            },
+            renderEntries() {
+                entryRenderCalls += 1;
+            },
+            refreshToolbarMenuItems() {
+                toolbarRefreshCalls += 1;
+            }
+        };
+
+        attachApplicationPluginHost(fileExp);
+        const runtimePluginsUpdated = listeners.get('assistos:runtime-plugins-updated');
+        assert.equal(typeof runtimePluginsUpdated, 'function');
+
+        runtimePluginsUpdated({ detail: { phase: 'discovered' } });
+        assert.deepEqual(fileExp.toolbarMenuItems, []);
+        assert.equal(closeCalls, 0);
+        assert.equal(entryRenderCalls, 1);
+        assert.equal(toolbarRefreshCalls, 1);
+
+        runtimePluginsUpdated({ detail: { phase: 'ready' } });
+        await Promise.resolve();
+        assert.equal(closeCalls, 0);
+        assert.equal(entryRenderCalls, 1);
+        assert.equal(toolbarRefreshCalls, 1);
+        delete globalThis.window;
     });
 });

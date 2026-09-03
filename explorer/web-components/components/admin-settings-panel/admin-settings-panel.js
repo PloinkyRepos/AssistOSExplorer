@@ -1,5 +1,5 @@
 import { parseRoles } from './admin-settings-utils.js';
-import { fetchAdminControlProof } from '../../../services/infrastructure/authApi.js';
+import { fetchUserAdministrationProof } from '../../../services/infrastructure/authApi.js';
 
 const ADMIN_CSRF_HEADER = 'x-ploinky-csrf-token';
 const ADMIN_MUTATION_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
@@ -236,7 +236,7 @@ export class AdminSettingsPanel {
     setStatus(message, kind = '') {
         if (!this.statusEl) return;
         this.statusEl.textContent = message || '';
-        this.statusEl.className = `status${kind ? ` ${kind}` : ''}`;
+        this.statusEl.className = `administration-status${kind ? ` ${kind}` : ''}`;
     }
 
     async request(path, options = {}) {
@@ -249,8 +249,10 @@ export class AdminSettingsPanel {
                 ...(options.headers || {})
             };
             if (requiresProof) {
-                const proof = await fetchAdminControlProof();
-                headers[ADMIN_CSRF_HEADER] = proof.csrfToken;
+                const proof = await fetchUserAdministrationProof({ agentName: this.agent });
+                if (proof.mode === 'control') {
+                    headers[ADMIN_CSRF_HEADER] = proof.csrfToken;
+                }
             }
             const response = await fetch(path, {
                 ...options,
@@ -263,7 +265,8 @@ export class AdminSettingsPanel {
         };
 
         let { response, payload } = await sendRequest();
-        if (requiresProof && response.status === 403 && payload?.error === 'csrf_invalid') {
+        if (requiresProof && response.status === 403
+            && ['csrf_invalid', 'browser_csrf_invalid'].includes(payload?.error)) {
             ({ response, payload } = await sendRequest());
         }
         if (!response.ok || payload.ok === false) {

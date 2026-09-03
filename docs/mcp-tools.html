@@ -48,7 +48,7 @@
                 <div class="doc-section" id="contract-role">
                     <h1>Explorer MCP Tools</h1>
                     <p>This page documents the MCP contract owned directly by Explorer. It is the filesystem-facing tool surface defined in <code>explorer/utils/server/tool-definitions.mjs</code>, dispatched by <code>explorer/utils/server/tool-runtime.mjs</code>, and invoked through <code>explorer/tools/explorer_tool.mjs</code>. It does not document <code>gitAgent</code> tools or <code>soplangAgent</code> tools, because those remain agent-owned contracts with their own documentation.</p>
-                    <p>Explorer uses MCP to expose safe workspace operations to the browser and to other agents. The contract covers file reads and writes, directory traversal, search, metadata inspection, plugin catalog aggregation, plugin settings persistence, and exposure of the active allowed roots.</p>
+                    <p>Explorer uses MCP to expose safe workspace operations to the browser and to other agents. The contract covers file reads and writes, directory traversal, search, metadata inspection, plugin catalog aggregation, plugin settings persistence at <code>.data/explorer/plugin-settings.json</code>, and exposure of the active allowed roots. WebMeet media commits accept staged blobs only at <code>.data/&lt;short-agent-name&gt;/blobs/&lt;blob-id&gt;</code>.</p>
                 </div>
 
                 <div class="doc-section" id="path-safety">

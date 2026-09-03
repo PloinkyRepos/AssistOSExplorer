@@ -84,7 +84,7 @@ admin-settings-panel .administration-tab.active::after {
     background: var(--accent);
 }
 
-admin-settings-panel .status {
+admin-settings-panel .administration-status {
     min-height: 26px;
     padding: 6px 14px;
     border-bottom: 1px solid var(--border);
@@ -94,11 +94,11 @@ admin-settings-panel .status {
     flex: 0 0 auto;
 }
 
-admin-settings-panel .status.ok {
+admin-settings-panel .administration-status.ok {
     color: var(--accent);
 }
 
-admin-settings-panel .status.error {
+admin-settings-panel .administration-status.error {
     color: var(--danger);
 }
 

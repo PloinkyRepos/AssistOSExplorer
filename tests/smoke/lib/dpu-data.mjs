@@ -9,7 +9,7 @@ import {
   selectLocalScreenContainer,
 } from './live-box.mjs';
 
-const BOX_DPU_DATA_ROOT = '/workspace/.ploinky/data/dpu-data';
+export const BOX_DPU_DATA_ROOT = '/workspace/.data/dpu-data';
 const BOX_WORKSPACE_ROOT = '/workspace';
 const MAX_BUFFER = 64 * 1024 * 1024;
 const READ_FILE_SCRIPT = [

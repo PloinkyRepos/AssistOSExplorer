@@ -23,10 +23,10 @@ The DPU domain has conflicting storage requirements. Lists and navigation need l
 
 ### Storage Layout
 
-By default, the storage root lives next to the resolved workspace root:
+The storage root is supplied explicitly through required `DPU_DATA_ROOT`. Ploinky mounts the managed host storage `.data/dpu-data` at `/dpu-data`:
 
 ```text
-.dpu-storage/
+/dpu-data/
   state.json
   permissions.manifest.json
   secrets.json
@@ -61,10 +61,7 @@ This keeps the domain layer focused on object rules and access control list sema
 
 Mutating operations run inside `withLockedState()`. That helper loads `state.json` and `permissions.manifest.json`, executes the requested mutation, and persists only the files whose in-memory state was marked dirty. Confidential file bodies and secret values use their own helpers instead of being embedded in metadata objects.
 
-Storage-root resolution is:
-
-1. `DPU_DATA_ROOT`, if set
-2. otherwise a default `.dpu-storage` directory next to the resolved workspace root
+Storage-root resolution requires a non-empty `DPU_DATA_ROOT`. The runtime fails closed when that variable is absent and does not derive a sibling workspace directory.
 
 Workspace-root resolution is:
 

@@ -2,8 +2,10 @@ import { expect } from './fixtures.mjs';
 import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
 
-export async function openDashboard(page, account = smokeConfig.primaryUser) {
-  await signIn(page, account, '/dashboard');
+export async function openRouterLanding(page, account = smokeConfig.primaryUser) {
+  await signIn(page, account, '/');
+  expect(new URL(page.url()).origin).toBe(new URL(smokeConfig.baseURL).origin);
+  await waitForExplorerReady(page);
   await expect(page.locator('body')).toBeVisible();
   await expect(page.locator('body')).not.toContainText(/API Route not found|Unexpected token/i);
 }
@@ -34,6 +36,10 @@ export async function openExplorer(page, options = {}) {
     hash = '',
   } = options;
   await navigateToExplorer(page, { account, hash });
+  await waitForExplorerReady(page);
+}
+
+async function waitForExplorerReady(page) {
   await expect(page.locator('#page_content')).toBeVisible({
     timeout: smokeConfig.timeouts.navigation,
   });

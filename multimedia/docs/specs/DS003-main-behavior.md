@@ -24,7 +24,7 @@ The agent uses this manifest:
 ```json
 {
   "lite-sandbox": true,
-  "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+  "container": "docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669",
   "profiles": {
     "default": {
       "install": "/code/scripts/install.sh"

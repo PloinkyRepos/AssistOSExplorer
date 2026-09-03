@@ -61,7 +61,7 @@ async function readStdinFallback() {
 }
 
 export async function listSites() {
-    const resolvedDataDir = resolveWebAssistDataRoot();
+    const resolvedDataDir = resolveWebAssistDataRoot({ allowMissing: true });
     const sitesDir = path.join(resolvedDataDir, 'sites');
 
     try {

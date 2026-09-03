@@ -1,7 +1,7 @@
 {
     "name": "userPersistoAgent",
     "description": "Authority for users, roles, capabilities, auth strategies, credits, subscriptions, Stripe billing, and audit. Uses embedded Persisto as its durable store and acts as the workspace SSO provider.",
-    "container": "docker.io/assistos/ploinky-node:24-bookworm-tools",
+    "container": "docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669",
     "ssoProvider": true,
     "agent": "sh /code/scripts/start.sh",
     "readiness": {
@@ -11,7 +11,7 @@
         "emailAgent"
     ],
     "volumes": {
-        ".ploinky/data/userPersistoAgent": "/data"
+        ".data/userPersistoAgent": "/data"
     },
     "routerAccess": {
         "httpRoutes": [

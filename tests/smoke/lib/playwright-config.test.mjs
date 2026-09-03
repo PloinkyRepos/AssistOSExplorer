@@ -17,6 +17,7 @@ test('every Playwright output is rooted beneath SMOKE_ARTIFACT_DIR', async () =>
   try {
     const moduleUrl = new URL(`../playwright.config.mjs?artifact-test=${Date.now()}`, import.meta.url);
     const { default: config, playwrightOutputPaths } = await import(moduleUrl.href);
+    assert.equal(config.reporter[0][0], './lib/redacted-reporter.mjs', 'redaction must precede every built-in reporter');
     const html = config.reporter.find(([name]) => name === 'html')[1].outputFolder;
     const json = config.reporter.find(([name]) => name === 'json')[1].outputFile;
     assert.deepEqual([html, json, config.outputDir], [

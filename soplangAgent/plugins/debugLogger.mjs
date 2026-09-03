@@ -1,7 +1,7 @@
 /**
  * Debug logger for SOPLang Builder.
  * Logs information only when ACHILLES_DEBUG=true or ACHILLES_DEBUG=1.
- * Writes logs to achilles-debug.log in current working directory.
+ * Writes logs to the configured SOPLang log directory.
  * Uses a lock file to coordinate concurrent writes across processes.
  */
 
@@ -31,7 +31,14 @@ const isDebugEnabled = () => {
 
 const timestamp = () => new Date().toISOString();
 
-const getLogFilePath = () => path.join(process.cwd(), 'achilles-debug.log');
+const getLogDirectory = () => {
+    const configured = String(process.env.LOGS_FOLDER || '').trim();
+    if (configured) return path.resolve(configured);
+    const home = String(process.env.HOME || '').trim();
+    if (!home) throw new Error('HOME or LOGS_FOLDER is required to resolve the SOPLang log directory.');
+    return path.join(path.resolve(home), '.soplang', 'logs');
+};
+const getLogFilePath = () => path.join(getLogDirectory(), 'achilles-debug.log');
 const getLockFilePath = () => `${getLogFilePath()}${LOCK_SUFFIX}`;
 
 const sleepSync = (ms) => {
@@ -118,6 +125,7 @@ const writeToFile = (level, args) => {
     let lockFd = null;
 
     try {
+        fs.mkdirSync(path.dirname(logFile), { recursive: true });
         lockFd = acquireLock(lockFile);
         fs.appendFileSync(logFile, message, 'utf8');
     } catch (err) {

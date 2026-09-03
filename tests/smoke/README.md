@@ -220,9 +220,16 @@ cd ${WORKSPACE_ROOT}/AssistOSExplorer/tests/smoke
 SMOKE_BASE_URL=http://127.0.0.1:18080 npm test -- --project=chromium specs/00-router-auth.spec.mjs
 ```
 
-It proves the dashboard, Explorer shell, and routed WebChat shell through
-Router. It is not the separate WebMeet external-network or two-account
+It proves the active Router root landing, Explorer shell, and routed WebChat
+shell. The root case enters `/` and waits for the selected Explorer surface to
+finish loading. Other cases authenticate directly into their intended surface,
+without first booting and abandoning Explorer. Credentials are submitted only
+on Router's `/auth/login` page; the retired `/dashboard` route is not a login destination. It is not the separate
+WebMeet external-network or two-account
 ScreenShare gate, and none of those gates substitutes for another.
+
+The focused authentication navigation regression uses installed Chromium:
+`node --test lib/auth-navigation.test.mjs`.
 
 ## Ploinky Core WebTTY Release Gate
 
@@ -278,7 +285,7 @@ a missing or extra listener, a wildcard, or an unrelated bind fails closed.
 
 Default smoke checks:
 
-- Router auth, dashboard, Explorer shell, and WebChat shell.
+- Router auth, root landing, Explorer shell, and WebChat shell.
 - WebChat file and folder uploads through the browser.
 - WebChat upload containment evidence from the upload response: `uploads/<sessionId>/...`.
 - Session-scoped WebChat `@` file suggestions by comparing two browser contexts.
@@ -450,7 +457,12 @@ On headed Linux without `DISPLAY`, the npm runner starts a deterministic 1920×1
 - `SMOKE_UMAMI=1` enables the real Umami Router gate. It authenticates first at
   Ploinky and then at Umami, proves dashboard HTML, assets, heartbeat API, and
   in-app navigation stay under
-  `/base-agent-additional-server/umamiAgent/3000/`.
+  `/base-agent-additional-server/umamiAgent/3000/`. Browser-canceled RSC requests
+  require independent proof that the original application reader consumed the
+  complete response. Repeated URLs require equal request/consumer counts and
+  complete, error-free EOF with the same positive byte count for every member;
+  partial or ambiguous siblings fail the gate. Raw browser failures remain in
+  the diagnostic ledger.
 - `SMOKE_GPT_RESEARCHER=1` enables the real GPTResearcher Router gate for HTML,
   assets, reports API, same-origin redirect rewriting, and a browser WebSocket
   ping/pong under `/base-agent-additional-server/GPTResearcher/8000/`. Root-relative and private-origin

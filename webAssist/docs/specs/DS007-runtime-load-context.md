@@ -21,7 +21,7 @@ This specification defines the active DS007-runtime-load-context contract for We
 - `message` (used by AKU search input)
 
 ### Reads
-- `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku/` runtime context, including:
+- `$WEBASSIST_DATA_ROOT/sites/<siteId>/.aku/` runtime context, including:
   - site KU and available profile documents,
   - session KU state metadata,
   - session turn history events,

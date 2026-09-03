@@ -123,3 +123,44 @@ test('tasks tool creates, updates, reorders, and completes markdown backlog task
   assert.deepEqual(historyListed.tasks.map((task) => task.id), ['TASK-001']);
   assert.equal(historyListed.tasks[0].resolution, 'Executed.');
 });
+
+test('tasks backlog scan excludes private .data trees from tool results', async (t) => {
+  const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tasks-scan-'));
+  t.after(async () => fs.rm(repoRoot, { recursive: true, force: true }));
+  const publicBacklog = path.join(repoRoot, 'public.backlog');
+  const privateBacklog = path.join(repoRoot, '.data', 'tasksAgent', 'private.backlog');
+  await fs.mkdir(path.dirname(privateBacklog), { recursive: true });
+  await fs.writeFile(publicBacklog, '# Backlog\n\n## Tasks\n', 'utf8');
+  await fs.writeFile(privateBacklog, '# Backlog\n\n## Tasks\n', 'utf8');
+
+  const result = await callTool('task_list', {
+    repoPath: repoRoot,
+    __debug: true
+  });
+
+  assert.equal(result.error, 'debug');
+  assert.equal(result.debug.fileCount, 1);
+});
+
+test('task_create rejects a backlog symlink that resolves outside repoPath without modifying its target', async (t) => {
+  const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tasks-symlink-escape-'));
+  t.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));
+  const repoRoot = path.join(fixtureRoot, 'repo');
+  const outsideBacklog = path.join(fixtureRoot, 'outside.backlog');
+  const linkedBacklog = path.join(repoRoot, 'linked.backlog');
+  const original = '# Backlog\n\n## Tasks\n\nOutside sentinel.\n';
+  await fs.mkdir(repoRoot, { recursive: true });
+  await fs.writeFile(outsideBacklog, original, 'utf8');
+  await fs.symlink(outsideBacklog, linkedBacklog);
+
+  const result = await callTool('task_create', {
+    repoPath: repoRoot,
+    backlogPath: linkedBacklog,
+    description: 'Must not escape',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /symbolic link|symlink escape/);
+  assert.equal(await fs.readFile(outsideBacklog, 'utf8'), original);
+  await assert.rejects(fs.access(path.join(repoRoot, 'linked.history')));
+});

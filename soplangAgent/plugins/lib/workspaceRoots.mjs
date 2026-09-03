@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export const EXCLUDE_DIRS = new Set(["node_modules", ".git", "dist", "agents", "blobs", "logs", "shared"]);
+export const EXCLUDE_DIRS = new Set(["node_modules", ".git", ".data", "dist", "agents", "blobs", "logs", "shared"]);
 export const PLOINKY_REPOS_DIR = path.join(".ploinky", "repos");
 
 export const pickWorkspaceRoot = async ({

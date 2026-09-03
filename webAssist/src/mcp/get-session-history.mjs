@@ -77,7 +77,7 @@ export async function getSessionHistory({
         throw new Error('web_cli_history requires sessionId.');
     }
 
-    const akuRootDir = resolveSiteDataDir(normalizedSiteId);
+    const akuRootDir = resolveSiteDataDir(normalizedSiteId, { allowMissing: true });
     const sessionKuId = getSessionKuId(normalizedSessionId);
 
     const aku = new AgenticKnowledgeUnits({

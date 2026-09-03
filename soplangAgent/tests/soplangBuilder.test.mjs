@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { createSoplangBuilder, getVariablesWithValues } from "../plugins/lib/soplangBuilderCore.mjs";
 import { createAchillesSkills } from "../plugins/lib/achillesSkillsCore.mjs";
-import debug from "../plugins/debugLogger.mjs";
 import { deriveInvocation } from "../plugins/lib/toolInvocation.mjs";
 import { walkMarkdownFiles } from "../plugins/lib/workspaceRoots.mjs";
 
@@ -395,6 +394,13 @@ test("syncMarkdownDocuments prefers PLOINKY_CWD and scans .ploinky/repos markdow
         '<!--{"achilles-ide-paragraph":{"text":"Hello"}}-->'
     ].join("\n"), "utf8");
     await fs.writeFile(path.join(root, "README.md"), "# Agent code readme\n", "utf8");
+    const privateDataDoc = path.join(root, ".data", "webAssist", "private.md");
+    await fs.mkdir(path.dirname(privateDataDoc), { recursive: true });
+    await fs.writeFile(privateDataDoc, [
+        '<!--{"achilles-ide-document":{"id":"private","title":"Private"}}-->',
+        '<!--{"achilles-ide-chapter":{"title":"Private"}}-->',
+        '<!--{"achilles-ide-paragraph":{"text":"Must not be scanned"}}-->'
+    ].join("\n"), "utf8");
 
     const workspace = createWorkspaceStub();
     const applied = [];
@@ -422,6 +428,7 @@ test("syncMarkdownDocuments prefers PLOINKY_CWD and scans .ploinky/repos markdow
 
     assert.equal(result.scanned, 2);
     assert.deepEqual(result.created, ["demo"]);
+    assert.equal(result.created.includes("private"), false);
     assert.equal(applied.length, 1);
     assert.equal(applied[0].template.docId, "demo");
 });

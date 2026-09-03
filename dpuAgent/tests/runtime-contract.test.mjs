@@ -3,8 +3,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { authInfoFromInvocation } from '../../shared/invocation-auth.mjs';
+import { getDpuDataRoot } from '../lib/dpu-store-internal/storage.mjs';
 
 const agentRoot = path.resolve(new URL('..', import.meta.url).pathname);
+
+test('DPU storage fails closed when DPU_DATA_ROOT is absent', () => {
+  const previous = process.env.DPU_DATA_ROOT;
+  try {
+    delete process.env.DPU_DATA_ROOT;
+    assert.throws(() => getDpuDataRoot(), /DPU_DATA_ROOT is required/);
+    process.env.DPU_DATA_ROOT = '/dpu-data';
+    assert.equal(getDpuDataRoot(), '/dpu-data');
+  } finally {
+    if (previous === undefined) delete process.env.DPU_DATA_ROOT;
+    else process.env.DPU_DATA_ROOT = previous;
+  }
+});
 
 test('package metadata does not expose the retired standalone MCP server', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(agentRoot, 'package.json'), 'utf8'));

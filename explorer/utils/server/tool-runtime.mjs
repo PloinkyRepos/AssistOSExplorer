@@ -284,7 +284,7 @@ export async function createExplorerToolRuntime({
     DEFAULT_DIRECTORY_TREE_MAX_NODES: defaultDirectoryTreeMaxNodes,
     getAllowedDirectories: () => allowedDirectories,
     commandMode: true,
-    searchTextJobStorePath: path.join(workspaceRoot, '.ploinky', 'explorer-search-jobs'),
+    searchTextJobStorePath: path.join(workspaceRoot, '.data', 'explorer', 'search-jobs'),
     getInvocationContext: () => activeInvocationContext
   });
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import path from 'node:path';
+import { withGitAgentRuntime as withEnv } from '../helpers/generatedRouterRuntime.mjs';
 
 const agentLibDir = path.resolve(new URL('../../../../ploinky/Agent', import.meta.url).pathname);
 
@@ -19,24 +20,7 @@ const {
 } = await import(`${moduleUrl.href}${moduleSuffix}`);
 const { authInfoFromInvocation } = await import(new URL('../../../../ploinky/Agent/lib/invocation-auth.mjs', import.meta.url).href);
 
-function withEnv(env, fn) {
-  const previous = new Map();
-  for (const [key, value] of Object.entries(env)) {
-    previous.set(key, process.env[key]);
-    if (value == null) delete process.env[key];
-    else process.env[key] = value;
-  }
-  return Promise.resolve()
-    .then(fn)
-    .finally(() => {
-      for (const [key, value] of previous.entries()) {
-        if (value == null) delete process.env[key];
-        else process.env[key] = value;
-      }
-    });
-}
-
-test('secret-store client calls DPU with an agent assertion and internal secret tool', async () => {
+test('secret-store client calls DPU with an agent assertion and internal secret tool', async (t) => {
   const requests = [];
   const server = http.createServer((req, res) => {
     const chunks = [];
@@ -64,11 +48,12 @@ test('secret-store client calls DPU with an agent assertion and internal secret 
     });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
   const { port } = server.address();
 
   await withEnv({
     PLOINKY_ROUTER_URL: `http://127.0.0.1:${port}`,
-    PLOINKY_ROUTER_AUTHORITY: `router.test:${port}`,
+    PLOINKY_ROUTER_AUTHORITY: '127.0.0.1:19090',
     PLOINKY_AGENT_ID: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_PRINCIPAL: 'agent:AchillesIDE/gitAgent',
     PLOINKY_AGENT_SECRET: 'a'.repeat(64),
@@ -91,7 +76,7 @@ test('secret-store client calls DPU with an agent assertion and internal secret 
   const request = requests[0];
   assert.equal(request.method, 'POST');
   assert.equal(request.url, '/dpuAgent/mcp');
-  assert.equal(request.headers.host, `router.test:${port}`);
+  assert.equal(request.headers.host, '127.0.0.1:19090');
   assert.equal(request.body.method, 'tools/call');
   assert.equal(request.body.params?.name, 'dpu_secret_put');
   assert.deepEqual(request.body.params?.arguments, { key: 'API_TOKEN', value: 'secret-value' });

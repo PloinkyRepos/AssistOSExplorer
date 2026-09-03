@@ -14,8 +14,6 @@
 /.ploinky/e2e-egress/
 .idea
 /soplangAgent/.tasksQueue
-/soplangAgent/achilles-debug.log
-/soplangAgent/last-tool.log
 /data/
 /webAssist/data/
 /webAssist/package.json

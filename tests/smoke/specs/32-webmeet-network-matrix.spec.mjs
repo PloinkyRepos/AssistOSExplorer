@@ -3,7 +3,6 @@ import { chromium } from '@playwright/test';
 import {
   assertDistinctAuthenticatedPrincipals,
   normalizePrincipalComponent,
-  signIn,
 } from '../lib/auth.mjs';
 import { smokeConfig } from '../lib/config.mjs';
 import { attachPageDiagnostics, expect, installRtcProbe, test } from '../lib/fixtures.mjs';
@@ -175,16 +174,14 @@ test.describe('WebMeet native external-network matrix @external', () => {
       expect(await browserEgress(pageA, echoUrl), 'browser A external IPv4').toBe(expectedEgressA);
       expect(await browserEgress(pageB, echoUrl), 'browser B external IPv4').toBe(expectedEgressB);
       const [principalA, principalB] = await Promise.all([
-        signIn(pageA, smokeConfig.primaryUser, '/dashboard', { requireConfiguredPrincipal: true }),
-        signIn(pageB, smokeConfig.secondaryUser, '/dashboard', { requireConfiguredPrincipal: true }),
+        openWebMeet(pageA, smokeConfig.primaryUser, { requireConfiguredPrincipal: true }),
+        openWebMeet(pageB, smokeConfig.secondaryUser, { expectCreateRoom: false, requireConfiguredPrincipal: true }),
       ]);
       const [verifiedPrincipalA, verifiedPrincipalB] = assertDistinctAuthenticatedPrincipals(principalA, principalB);
 
-      await openWebMeet(pageA, smokeConfig.primaryUser);
       roomCreationAttempted = true;
       await createRoom(pageA, roomTitle);
       await joinRoom(pageA, roomTitle);
-      await openWebMeet(pageB, smokeConfig.secondaryUser, { expectCreateRoom: false });
       await joinRoom(pageB, roomTitle);
       const liveKitParticipants = await expectTwoDistinctWebMeetParticipants(pageA, pageB);
       await attachJsonEvidence(testInfo, 'external-authenticated-participant-identities', {

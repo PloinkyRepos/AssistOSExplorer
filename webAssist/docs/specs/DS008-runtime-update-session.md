@@ -20,7 +20,7 @@ This specification defines the active DS008-runtime-update-session contract for 
 - `appendSessionTurn({ siteId, sessionId, userMessage, agentResponse })` — records `turn` events in `ku_sess_<sessionId>`.
 
 ### Behavior
-- Writes only to `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku/`.
+- Writes only to `$WEBASSIST_DATA_ROOT/sites/<siteId>/.aku/`.
 - `updateSessionProfile` writes profile details/contact information to KU state + metadata.
 - `appendSessionTurn` appends user/agent turn events. It does not overwrite KU state.
 - Contact fields are merged with existing contact fields in the profile file.

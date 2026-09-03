@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku, plannerDecision } from './helpers.mjs';
 import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 
 const SITE_ID = 'demo-site';
@@ -32,7 +32,7 @@ class FakeFlowSynthesisLLM extends LLMAgent {
         if (isSecondTurn) {
             if (!this.secondTurnPersisted) {
                 this.secondTurnPersisted = true;
-                return {
+                return plannerDecision({
                     tool: 'webassist-session',
                     toolPrompt: JSON.stringify({
                         siteId,
@@ -49,19 +49,19 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                         },
                     }),
                     reason: 'Persist second-turn profile data.',
-                };
+                });
             }
 
-            return {
+            return plannerDecision({
                 tool: 'final_answer',
                 toolPrompt: 'Thanks. I still need one detail: what project timeline and expected outcomes do you have?',
                 reason: 'Return second turn payload.',
-            };
+            });
         }
 
         if (!this.firstTurnPersisted) {
             this.firstTurnPersisted = true;
-            return {
+            return plannerDecision({
                 tool: 'webassist-session',
                 toolPrompt: JSON.stringify({
                     siteId,
@@ -75,14 +75,14 @@ class FakeFlowSynthesisLLM extends LLMAgent {
                     },
                 }),
                 reason: 'Persist first-turn profile data.',
-            };
+            });
         }
 
-        return {
+        return plannerDecision({
             tool: 'final_answer',
             toolPrompt: 'Great. What available datasets and student resources can you provide for collaboration?',
             reason: 'Return first turn payload.',
-        };
+        });
     }
 }
 

@@ -1,5 +1,6 @@
 import { expect } from './fixtures.mjs';
 import { smokeConfig } from './config.mjs';
+import { getWithoutKeepAlive } from './api-probe.mjs';
 
 function loginForm(page) {
   return page.locator('form[action="/auth/login"], input#username, input[name="username"]').first();
@@ -75,20 +76,20 @@ export async function readAuthenticatedPrincipal(page, account) {
 }
 
 export async function hasAuthenticatedSession(request) {
-  const response = await request.get('/auth/token').catch(() => null);
+  const response = await getWithoutKeepAlive(request, '/auth/token').catch(() => null);
   return Boolean(response?.ok());
 }
 
 export async function signIn(
   page,
   account = smokeConfig.primaryUser,
-  returnTo = '/dashboard',
+  returnTo = '/',
   { requireConfiguredPrincipal = false } = {},
 ) {
-  await page.goto(returnTo, { waitUntil: 'load' });
-
   const sessionOk = await hasAuthenticatedSession(page.request);
-  if (!sessionOk && !(await loginForm(page).isVisible({ timeout: 1_000 }).catch(() => false))) {
+  if (sessionOk) {
+    await page.goto(returnTo, { waitUntil: 'load' });
+  } else {
     const params = new URLSearchParams({
       agent: smokeConfig.authAgent,
       returnTo,
@@ -96,7 +97,9 @@ export async function signIn(
     await page.goto(`/auth/login?${params.toString()}`, { waitUntil: 'load' });
   }
 
-  if (await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
+  if (new URL(page.url()).origin === new URL(smokeConfig.baseURL).origin
+    && new URL(page.url()).pathname === '/auth/login'
+    && await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
     await page.locator('input#username, input[name="username"]').first().fill(account.username);
     await page.locator('input#password, input[name="password"]').first().fill(account.password);
     await Promise.all([
@@ -113,7 +116,7 @@ export async function signIn(
   return readAuthenticatedPrincipal(page, requireConfiguredPrincipal ? account : undefined);
 }
 
-export async function trySignIn(page, account = smokeConfig.primaryUser, returnTo = '/dashboard') {
+export async function trySignIn(page, account = smokeConfig.primaryUser, returnTo = '/') {
   try {
     await signIn(page, account, returnTo);
     return true;

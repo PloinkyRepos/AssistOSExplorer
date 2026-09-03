@@ -39,15 +39,26 @@ test.describe('GPTResearcher Router publication @external', () => {
   test('real HTML, assets, API, redirect, and WebSocket stay under the configured base path', async ({ page }, testInfo) => {
     test.skip(!smokeConfig.flags.gptResearcher, 'SMOKE_GPT_RESEARCHER is off.');
     const routerOrigin = new URL(smokeConfig.baseURL).origin;
-    await signIn(page, smokeConfig.primaryUser, '/dashboard');
-
     const requests = [];
     const websocketEvents = [];
-    page.on('request', (request) => requests.push({
-      url: request.url(),
-      method: request.method(),
-      resourceType: request.resourceType(),
-    }));
+    const documentResponses = [];
+    let authenticating = true;
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      // Router login and the helper's principal check are not service requests.
+      if (authenticating && url.origin === routerOrigin
+        && ((url.pathname === '/auth/login' && ['GET', 'POST'].includes(request.method()))
+          || (url.pathname === '/auth/token' && request.method() === 'GET'))) return;
+      requests.push({
+        url: request.url(),
+        method: request.method(),
+        resourceType: request.resourceType(),
+      });
+    });
+    page.on('response', (response) => {
+      if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()
+        && new URL(response.url()).pathname.startsWith(SERVICE_PREFIX)) documentResponses.push(response);
+    });
     page.on('websocket', (websocket) => {
       const event = { url: websocket.url(), sent: 0, received: 0 };
       websocketEvents.push(event);
@@ -55,7 +66,10 @@ test.describe('GPTResearcher Router publication @external', () => {
       websocket.on('framereceived', () => { event.received += 1; });
     });
 
-    const htmlResponse = await page.goto(SERVICE_PREFIX, { waitUntil: 'domcontentloaded' });
+    await signIn(page, smokeConfig.primaryUser, SERVICE_PREFIX);
+    authenticating = false;
+    const htmlResponse = documentResponses.at(-1);
+    expect(htmlResponse, 'GPTResearcher navigation must produce its document response').toBeTruthy();
     expect(htmlResponse?.status(), 'GPTResearcher HTML through Router').toBe(200);
     expect(new URL(page.url()).pathname).toBe(SERVICE_PREFIX);
     await expect(page.locator('h1')).toContainText(/Research/i);

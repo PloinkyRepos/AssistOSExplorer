@@ -67,7 +67,7 @@
 
                 <section>
                     <h2>Process and Safety Notes</h2>
-                    <p>The wrapper is stateless per invocation, while long-lived auth state is persisted under user-scoped workspace state files and DPU-backed secret storage. Git subprocesses run with explicit timeout control and error normalization for UI-friendly diagnostics.</p>
+                    <p>The wrapper is stateless per invocation, while long-lived auth state is persisted under user-scoped files in <code>.data/gitAgent/github-auth/</code> and DPU-backed secret storage. Git subprocesses run with explicit timeout control and error normalization for UI-friendly diagnostics.</p>
                     <div class="doc-callout">
                         <p>This design keeps invocation isolation while still preserving required auth and workspace state continuity across calls.</p>
                     </div>

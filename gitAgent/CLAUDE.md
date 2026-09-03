@@ -29,7 +29,7 @@ gitAgent mediates Explorer Git workflows through MCP tools, workspace path polic
 
 ## Runtime Defaults
 
-Runs `scripts/startAgent.sh` in `docker.io/assistos/ploinky-node:24-bookworm-tools` with `lite-sandbox: true` and Git installation checks.
+Runs `scripts/startAgent.sh` in `docker.io/assistos/ploinky-node@sha256:accd925fcbf460c1f4c7a5cd9e2d46539c615bbfad2e896cabb7556d8050a669` with `lite-sandbox: true` and Git installation checks.
 
 ## Key Paths
 

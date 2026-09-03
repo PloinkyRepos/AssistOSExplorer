@@ -15,7 +15,7 @@ This specification defines the Explorer-owned core. WebMeet board placement, roo
 
 Each document, chapter, paragraph, variant, and variant image has a stable identifier. The document id comes from AssistOS Markdown metadata and remains the identity after rename or move; a filesystem path is only the current location. When a Markdown document has no document id, Explorer generates one and persists it in Markdown during the same first initialization before returning a usable editor or SCRIPTA projection.
 
-Explorer stores canonical binary state at `.ploinky/data/explorer/automerge/documents/<document-id>.automerge`. SCRIPTA's path-free, sanitized browser replica is stored separately at `.ploinky/data/explorer/automerge/scripta-collaboration/<document-id>.automerge`. No `.automerge` sidecar is created beside the Markdown file. The canonical state contains the complete private model; the collaboration replica contains only the fields admitted by the public collaboration contract.
+Explorer stores canonical binary state at `.data/explorer/automerge/documents/<document-id>.automerge`. SCRIPTA's path-free, sanitized browser replica is stored separately at `.data/explorer/automerge/scripta-collaboration/<document-id>.automerge`. No `.automerge` sidecar is created beside the Markdown file. The canonical state contains the complete private model; the collaboration replica contains only the fields admitted by the public collaboration contract.
 
 ## Canonical Markdown Format
 
@@ -75,6 +75,8 @@ Explorer validates workspace paths, stable document identity, operation schemas,
 Create and first open initialize canonical Automerge state and materialize stable metadata atomically. Rename and move preserve the document id and therefore reuse the same canonical state. Save serializes the current canonical state to Markdown. A changed workspace Markdown file is reparsed and imported through Explorer synchronization; direct file content never becomes a competing authority while a canonical state exists.
 
 Physical deletion is transactional across Markdown, canonical Automerge state, and the sanitized collaboration replica. Prepare stages every owned artifact, commit removes the stage after the attaching integration has persisted its detach, and rollback restores it. Explorer serializes lifecycle operations with a document lock and recovers expired pending deletions conservatively.
+
+Deletion stages live only under `.data/explorer/automerge/documents/pending-deletions/<transaction-id>`. Every phase, including recovery after an earlier successful initialization, revalidates the private directory chain, transaction metadata, staged files, and related private artifacts before accessing them. Symbolic links are rejected with `PLOINKY_AGENT_DATA_POLICY_VIOLATION`. Preparation preflights all artifact paths before moving originals; rollback preflights staged files and destinations before restoring anything. If preparation fails and restoration cannot complete safely, the remaining staged originals are retained rather than deleted.
 
 ## Conclusion
 

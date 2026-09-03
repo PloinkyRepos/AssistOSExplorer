@@ -59,7 +59,8 @@ test('mcp mode exposes site-scoped CLI contract', async (t) => {
 
     await t.test('accepts siteId from MCP envelope', async () => {
         const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'webassist-mcp-'));
-        await fs.mkdir(path.join(tempRoot, 'webassist-data'), { recursive: true });
+        const dataRoot = path.join(tempRoot, '.data', 'webAssist', 'data');
+        await fs.mkdir(dataRoot, { recursive: true });
         const envelope = {
             input: {
                 siteId: 'demo-site',
@@ -70,7 +71,7 @@ test('mcp mode exposes site-scoped CLI contract', async (t) => {
         const result = await runCli(['-mcp'], {
             stdin: `${JSON.stringify(envelope)}\n`,
             env: {
-                PLOINKY_WORKSPACE_ROOT: tempRoot,
+                WEBASSIST_DATA_ROOT: dataRoot,
             },
         });
         await fs.rm(tempRoot, { recursive: true, force: true });

@@ -29,7 +29,7 @@ Visitor turn orchestration is driven by the system prompt (`visitor-flow-system-
 ### Runtime Modules
 - `load-aku-context` loads site-scoped AKU context before orchestration.
 - `update-session` updates session profile KU state and appends session turns as events.
-- `akuStore` resolves `$PLOINKY_WORKSPACE_ROOT/webassist-data/sites/<siteId>/.aku`.
+- `akuStore` resolves `$WEBASSIST_DATA_ROOT/sites/<siteId>/.aku`.
 
 ### Behavioral Rules
 - `siteId` is mandatory and isolates all reads/writes.

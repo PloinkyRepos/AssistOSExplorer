@@ -151,7 +151,7 @@ async function loadBacklogIndex(root, backlogPath = '') {
 }
 
 const BACKLOG_EXTENSION = '.backlog';
-const BACKLOG_EXCLUDED_DIRS = new Set(['.git', '.ploinky', 'node_modules']);
+const BACKLOG_EXCLUDED_DIRS = new Set(['.git', '.ploinky', '.data', 'node_modules']);
 
 function isBacklogFilename(name) {
   return typeof name === 'string' && name.endsWith(BACKLOG_EXTENSION);
@@ -166,7 +166,38 @@ function isSafeChildPath(root, candidate) {
   return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
-function resolveBacklogPath(root, backlogPath) {
+async function resolveCanonicalRepoFile(root, candidate, fieldName) {
+  const canonicalRoot = await fs.realpath(root);
+  const relative = path.relative(root, candidate);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`${fieldName} must be inside repoPath.`);
+  }
+
+  let candidateStats = null;
+  try {
+    candidateStats = await fs.lstat(candidate);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  if (candidateStats?.isSymbolicLink()) {
+    throw new Error(`${fieldName} must not be a symbolic link.`);
+  }
+
+  let canonicalCandidate;
+  try {
+    canonicalCandidate = await fs.realpath(candidate);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    const canonicalParent = await fs.realpath(path.dirname(candidate));
+    canonicalCandidate = path.join(canonicalParent, path.basename(candidate));
+  }
+  if (!isSafeChildPath(canonicalRoot, canonicalCandidate)) {
+    throw new Error(`${fieldName} must resolve inside repoPath without a symlink escape.`);
+  }
+  return candidate;
+}
+
+async function resolveBacklogPath(root, backlogPath) {
   const raw = normalizePloinkyPath(normalizeString(backlogPath));
   if (!raw) return '';
   if (raw.startsWith('/.ploinky/')) {
@@ -182,10 +213,10 @@ function resolveBacklogPath(root, backlogPath) {
   if (!isSafeChildPath(root, absolute)) {
     throw new Error('backlogPath must be inside repoPath.');
   }
-  return absolute;
+  return resolveCanonicalRepoFile(root, absolute, 'backlogPath');
 }
 
-function resolveHistoryPath(root, historyPath) {
+async function resolveHistoryPath(root, historyPath) {
   const raw = normalizePloinkyPath(normalizeString(historyPath));
   if (!raw) return '';
   if (raw.startsWith('/.ploinky/')) {
@@ -201,7 +232,7 @@ function resolveHistoryPath(root, historyPath) {
   if (!isSafeChildPath(root, absolute)) {
     throw new Error('backlogPath must be inside repoPath.');
   }
-  return absolute;
+  return resolveCanonicalRepoFile(root, absolute, 'backlogPath');
 }
 
 async function listBacklogFiles(root) {
@@ -284,7 +315,7 @@ async function writeHistoryTasks(historyPath, tasks) {
 }
 
 async function loadTasks(root, backlogPath = '') {
-  const resolved = backlogPath ? resolveBacklogPath(root, backlogPath) : '';
+  const resolved = backlogPath ? await resolveBacklogPath(root, backlogPath) : '';
   if (resolved) {
     const tasks = await readMarkdownFile(resolved);
     return {
@@ -412,7 +443,7 @@ async function main() {
       if (filters.__debug === true) {
         let fileInfo = {};
         try {
-          const debugPath = resolveBacklogPath(root, backlogPathArg);
+          const debugPath = await resolveBacklogPath(root, backlogPathArg);
           const stat = fsSync.statSync(debugPath);
           fileInfo = {
             exists: true,
@@ -457,7 +488,7 @@ async function main() {
         writeJson({ ok: false, error: 'backlogPath is required.' });
         return;
       }
-      const historyPath = resolveHistoryPath(root, backlogPathArg);
+      const historyPath = await resolveHistoryPath(root, backlogPathArg);
       const historyTasks = await readMarkdownFile(historyPath, { history: true });
       const decorated = decorateHistoryTasks(historyTasks, historyPath);
       const query = normalizeString(args?.q);
@@ -478,7 +509,7 @@ async function main() {
         writeJson({ ok: false, error: 'backlogPath is required.' });
         return;
       }
-      const sourcePath = resolveBacklogPath(root, backlogPathArg);
+      const sourcePath = await resolveBacklogPath(root, backlogPathArg);
       const fileTasks = await readMarkdownFile(sourcePath);
       const index = findTaskIndexById(fileTasks, id);
       if (index < 0) {
@@ -512,8 +543,8 @@ async function main() {
         options,
         resolution
       });
-      const targetPath = resolveBacklogPath(root, backlogPathArg);
-      const historyPath = getHistoryPathFromBacklog(targetPath);
+      const targetPath = await resolveBacklogPath(root, backlogPathArg);
+      const historyPath = await resolveHistoryPath(root, getHistoryPathFromBacklog(targetPath));
       await ensureBacklogFile(targetPath);
       await ensureHistoryFile(historyPath);
       const fileTasks = await readMarkdownFile(targetPath);
@@ -534,8 +565,8 @@ async function main() {
         writeJson({ ok: false, error: 'backlogPath is required.' });
         return;
       }
-      const sourcePath = resolveBacklogPath(root, backlogPathArg);
-      const historyPath = getHistoryPathFromBacklog(sourcePath);
+      const sourcePath = await resolveBacklogPath(root, backlogPathArg);
+      const historyPath = await resolveHistoryPath(root, getHistoryPathFromBacklog(sourcePath));
       await ensureHistoryFile(historyPath);
       const fileTasks = await readMarkdownFile(sourcePath);
       const historyTasks = await readMarkdownFile(historyPath, { history: true });
@@ -604,7 +635,7 @@ async function main() {
         writeJson({ ok: false, error: 'backlogPath is required.' });
         return;
       }
-      const sourcePath = resolveBacklogPath(root, backlogPathArg);
+      const sourcePath = await resolveBacklogPath(root, backlogPathArg);
       const fileTasks = await readMarkdownFile(sourcePath);
       const index = findTaskIndexById(fileTasks, id);
       if (index < 0) {
@@ -628,7 +659,7 @@ async function main() {
         writeJson({ ok: false, error: 'order array is required.' });
         return;
       }
-      const sourcePath = resolveBacklogPath(root, backlogPathArg);
+      const sourcePath = await resolveBacklogPath(root, backlogPathArg);
       const fileTasks = await readMarkdownFile(sourcePath);
       const byIdMap = new Map(fileTasks.map((task) => [normalizeString(task?.id).toUpperCase(), task]));
       const orderSet = new Set(order.map((rawId) => String(rawId || '').trim().toUpperCase()).filter(Boolean));

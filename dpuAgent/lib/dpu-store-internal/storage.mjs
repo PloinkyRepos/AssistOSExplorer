@@ -12,7 +12,6 @@ import {
 } from './permissions-manifest.mjs';
 import { applyFreshDefaultAgentPolicies } from './default-agent-policies.mjs';
 
-const DPU_DATA_ROOT_NAME = '.dpu-storage';
 const STATE_FILENAME = 'state.json';
 const PERMISSIONS_MANIFEST_FILENAME = 'permissions.manifest.json';
 const LOCK_DIRNAME = '.lock';
@@ -52,10 +51,10 @@ export function getDpuDataRoot() {
   const configured = [
     process.env.DPU_DATA_ROOT
   ].find(isNonEmptyString);
-  if (configured) {
-    return path.resolve(configured);
+  if (!configured) {
+    throw new Error('DPU_DATA_ROOT is required and must identify the mounted DPU data root.');
   }
-  return path.join(path.dirname(getWorkspaceRoot()), DPU_DATA_ROOT_NAME);
+  return path.resolve(configured);
 }
 
 export function getPloinkyReposRoot() {

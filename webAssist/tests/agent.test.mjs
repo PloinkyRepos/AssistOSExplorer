@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { AgenticKnowledgeUnits, LLMAgent } from 'achillesAgentLib';
 
 import { createWebAssistAgent } from '../src/index.mjs';
-import { createWebAssistSandbox, ensureSiteAku } from './helpers.mjs';
+import { createWebAssistSandbox, ensureSiteAku, plannerDecision } from './helpers.mjs';
 import { loadAkuContext } from '../src/runtime/load-aku-context.mjs';
 
 const SITE_ID = 'demo-site';
@@ -17,7 +17,7 @@ class FakeWebAssistLLM extends LLMAgent {
         this.calls = [];
     }
 
-    async complete({ prompt, context }) {
+    async complete({ prompt, history, context }) {
         this.calls.push({ type: 'complete', prompt, context });
 
         if (context?.intent !== 'agentic-session-planner') {
@@ -28,8 +28,9 @@ class FakeWebAssistLLM extends LLMAgent {
         const sessionId = runtimePrompt.match(/"sessionId"\s*:\s*"([^"]+)"/)?.[1] || 'visitor-42';
         const siteId = runtimePrompt.match(/Site ID:\n([^\n]+)/)?.[1] || SITE_ID;
 
-        if (!prompt.includes('TOOL[webassist-lead]')) {
-            return {
+        const plannerContext = history.find((entry) => entry.role === 'system')?.message || '';
+        if (!plannerContext.includes('TOOL[webassist-lead]')) {
+            return plannerDecision({
                 tool: 'webassist-lead',
                 toolPrompt: JSON.stringify({
                     siteId,
@@ -44,11 +45,11 @@ class FakeWebAssistLLM extends LLMAgent {
                     summary: 'High-intent developer asking for an API integration discussion.',
                 }),
                 reason: 'Create qualified lead.',
-            };
+            });
         }
 
-        if (!prompt.includes('TOOL[webassist-session]')) {
-            return {
+        if (!plannerContext.includes('TOOL[webassist-session]')) {
+            return plannerDecision({
                 tool: 'webassist-session',
                 toolPrompt: JSON.stringify({
                     siteId,
@@ -60,14 +61,14 @@ class FakeWebAssistLLM extends LLMAgent {
                     },
                 }),
                 reason: 'Persist profiling updates.',
-            };
+            });
         }
 
-        return {
+        return plannerDecision({
             tool: 'final_answer',
             toolPrompt: 'Sigur — va putem ajuta cu integrarea API-ului. Mai jos gasiti linkul de programare.',
             reason: 'Return final runtime payload.',
-        };
+        });
     }
 }
 

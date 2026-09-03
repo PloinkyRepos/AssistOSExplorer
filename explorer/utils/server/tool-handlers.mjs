@@ -6,6 +6,7 @@ import { createAvatarSettingsStore } from './avatar-settings/avatar-settings-sto
 import { createMarkdownCrdtStore } from './markdown-crdt/markdown-crdt-store.mjs';
 import { createScriptaCrdtService } from './markdown-crdt/scripta-crdt-service.mjs';
 import { createWebMeetMediaStore } from './webmeet-media-store.mjs';
+import { createExplorerPrivateDataBoundary } from './private-data-boundary.mjs';
 
 function parseArgs(schema, args, name) {
   const parsed = schema.safeParse(args);
@@ -106,6 +107,7 @@ export function createToolHandlers({
   searchTextJobStorePath = '',
   getInvocationContext = () => ({})
 }) {
+  const privateData = createExplorerPrivateDataBoundary({ fs, path, workspaceRoot });
   const {
     ReadTextFileArgsSchema,
     ReadMediaFileArgsSchema,
@@ -196,8 +198,11 @@ export function createToolHandlers({
 
   async function writeSearchTextJobRecord(job) {
     if (!searchTextJobStorePath) return;
-    await fs.mkdir(searchTextJobStorePath, { recursive: true });
-    await fs.writeFile(path.join(searchTextJobStorePath, `${job.id}.json`), `${JSON.stringify(job)}\n`, 'utf8');
+    const jobPath = await privateData.resolveFile(
+      ['search-jobs', `${job.id}.json`],
+      { createParent: true }
+    );
+    await fs.writeFile(jobPath, `${JSON.stringify(job)}\n`, 'utf8');
   }
 
   async function readSearchTextJobRecord(jobId) {
@@ -205,7 +210,8 @@ export function createToolHandlers({
     const safeJobId = String(jobId || '').trim();
     if (!/^[a-zA-Z0-9_.-]+$/.test(safeJobId)) return null;
     try {
-      const raw = await fs.readFile(path.join(searchTextJobStorePath, `${safeJobId}.json`), 'utf8');
+      const jobPath = await privateData.resolveFile(['search-jobs', `${safeJobId}.json`]);
+      const raw = await fs.readFile(jobPath, 'utf8');
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === 'object' ? parsed : null;
     } catch {
@@ -213,7 +219,7 @@ export function createToolHandlers({
     }
   }
 
-  const pluginSettingsPath = path.join(workspaceRoot, '.ploinky', 'explorer-plugin-settings.json');
+  const pluginSettingsPath = path.join(workspaceRoot, '.data', 'explorer', 'plugin-settings.json');
   const skillsManifestFile = 'ploinky-skills-manifest.json';
   const reposCacheRoot = path.join(workspaceRoot, '.ploinky', 'repos');
   const canonicalAgentsDir = '.agents';
@@ -517,7 +523,8 @@ export function createToolHandlers({
 
   async function readPluginSettings() {
     try {
-      const raw = await fs.readFile(pluginSettingsPath, 'utf8');
+      const safePluginSettingsPath = await privateData.resolveFile(['plugin-settings.json']);
+      const raw = await fs.readFile(safePluginSettingsPath, 'utf8');
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         return { plugins: {} };
@@ -536,15 +543,17 @@ export function createToolHandlers({
   }
 
   async function writePluginSettings(settings) {
-    const dirPath = path.dirname(pluginSettingsPath);
-    await fs.mkdir(dirPath, { recursive: true });
+    const safePluginSettingsPath = await privateData.resolveFile(
+      ['plugin-settings.json'],
+      { createParent: true }
+    );
     const normalized = {
       plugins: settings?.plugins && typeof settings.plugins === 'object' && !Array.isArray(settings.plugins)
         ? settings.plugins
         : {}
     };
-    await fs.writeFile(pluginSettingsPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
-    invalidateCachesForPath(pluginSettingsPath);
+    await fs.writeFile(safePluginSettingsPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+    invalidateCachesForPath(safePluginSettingsPath);
   }
 
   async function handleReadText(args) {
