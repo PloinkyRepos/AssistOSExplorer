@@ -2,6 +2,8 @@ import { expect } from './fixtures.mjs';
 import { smokeConfig } from './config.mjs';
 import { getWithoutKeepAlive } from './api-probe.mjs';
 
+const USERPERSISTO_LOGIN_PATH = '/base-agent-additional-server/userPersistoAgent/7000/service/auth/';
+
 function loginForm(page) {
   return page.locator('form[action="/auth/login"], input#username, input[name="username"]').first();
 }
@@ -97,8 +99,12 @@ export async function signIn(
     await page.goto(`/auth/login?${params.toString()}`, { waitUntil: 'load' });
   }
 
-  if (new URL(page.url()).origin === new URL(smokeConfig.baseURL).origin
-    && new URL(page.url()).pathname === '/auth/login'
+  const smokeOrigin = new URL(smokeConfig.baseURL).origin;
+  const loginUrl = new URL(page.url());
+  if (loginUrl.origin !== smokeOrigin) {
+    throw new Error('Authentication left the configured smoke origin.');
+  }
+  if (loginUrl.pathname === '/auth/login'
     && await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
     await page.locator('input#username, input[name="username"]').first().fill(account.username);
     await page.locator('input#password, input[name="password"]').first().fill(account.password);
@@ -106,12 +112,31 @@ export async function signIn(
       page.waitForNavigation({ waitUntil: 'load' }).catch(() => null),
       page.locator('form[action="/auth/login"] button[type="submit"], button[type="submit"], .auth-btn').first().click(),
     ]);
+  } else if (loginUrl.pathname === USERPERSISTO_LOGIN_PATH) {
+    await page.locator('#auth_content form.password-panel, #auth_content form.registration-panel')
+      .first().waitFor({ state: 'visible', timeout: smokeConfig.timeouts.navigation });
+    const passwordForm = page.locator('#auth_content form.password-panel');
+    if (!await passwordForm.isVisible()) {
+      throw new Error('UserPersisto password sign-in is unavailable. Complete installation setup before running smoke tests.');
+    }
+    await passwordForm.locator('input[name="email"]').fill(account.username);
+    await passwordForm.locator('input[name="password"]').fill(account.password);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'load' }).catch(() => null),
+      passwordForm.getByRole('button', { name: 'Sign in', exact: true }).click(),
+    ]);
   }
 
   await page.waitForLoadState('load');
+  if (new URL(page.url()).origin !== smokeOrigin) {
+    throw new Error('Authentication left the configured smoke origin.');
+  }
   await expect(page.locator('body')).not.toContainText(/Invalid username or password|Local auth is not configured/i);
   if (new URL(page.url()).pathname === '/auth/login') {
     throw new Error(`Login did not leave /auth/login for ${account.username}.`);
+  }
+  if (new URL(page.url()).pathname === USERPERSISTO_LOGIN_PATH) {
+    throw new Error(`Login did not leave UserPersisto for ${account.username}.`);
   }
   return readAuthenticatedPrincipal(page, requireConfiguredPrincipal ? account : undefined);
 }

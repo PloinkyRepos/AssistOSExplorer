@@ -31,7 +31,7 @@ npm run test:onlyoffice-confidential
 uses the exact Ploinky checkout mounted read-only at `/opt/ploinky`. A different
 checkout is rejected even when it happens to name the same commit.
 
-The default local credentials are `admin` / `admin` and `user` / `user`. Override them with:
+The default local-auth credentials are `admin` / `admin` and `user` / `user`. Override them with:
 
 ```bash
 SMOKE_USERNAME=admin SMOKE_PASSWORD=admin \
@@ -39,6 +39,14 @@ SMOKE_SECONDARY_USERNAME=user SMOKE_SECONDARY_PASSWORD=user \
 SMOKE_BASE_URL=https://skills.axiologic.dev \
 npm test
 ```
+
+For UserPersisto SSO, complete the fresh installation's **Create admin account**
+flow before testing, then create a second account with the `user` role. The
+default self-registration policy assigns that role to subsequent accounts.
+Use two test accounts with their optional usernames unset and pass their email
+addresses as `SMOKE_USERNAME` and `SMOKE_SECONDARY_USERNAME`, together with their
+passwords. The helper signs in through UserPersisto's password form and verifies
+the resulting Router principal; it does not create accounts during a gate.
 
 Run the dedicated public QA acceptance gate in headless Chromium with:
 
