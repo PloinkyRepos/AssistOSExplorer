@@ -32,7 +32,7 @@ function exactString(value, name) {
 }
 
 function exactPort(value, name) {
-  const text = exactString(value, name);
+  const text = String(value ?? '');
   if (!/^[1-9][0-9]*$/.test(text) || Number(text) > 65_535) {
     throw new Error(`${name} must be an exact TCP/UDP port.`);
   }
@@ -97,6 +97,7 @@ function exactAgentLibCommit(value, name) {
 function exactBoxLabels(labels, {
   expectedImageRef,
   selectedRouterHostPort,
+  selectedMediaHostPort,
 } = {}) {
   const source = record(labels, 'outer container Config.Labels');
   const semanticEntries = Object.entries(source)
@@ -124,7 +125,7 @@ function exactBoxLabels(labels, {
     source[BOX_LABELS.mediaHostPort],
     'outer container Box media-host-port label',
   );
-  if (mediaHostPort !== '7882') {
+  if (mediaHostPort !== selectedMediaHostPort) {
     throw new Error('Outer container Box media-host-port label does not match its exact publication.');
   }
   const seccompFingerprint = exactSha256(
@@ -242,10 +243,10 @@ export function normalizeOuterPortBindings(bindings) {
   return sortedObject(normalized);
 }
 
-function expectedBindings(selectedRouterHostPort) {
+function expectedBindings(selectedRouterHostPort, selectedMediaHostPort) {
   return normalizeOuterPortBindings({
     [ROUTER_TARGET]: [{ HostIp: '127.0.0.1', HostPort: selectedRouterHostPort }],
-    [MEDIA_TARGET]: [{ HostIp: '0.0.0.0', HostPort: '7882' }],
+    [MEDIA_TARGET]: [{ HostIp: '0.0.0.0', HostPort: selectedMediaHostPort }],
   });
 }
 
@@ -255,12 +256,17 @@ function assertExactBindings(bindings) {
   if (!router || router.length !== 1) {
     throw new Error(`Box PortBindings must contain exactly one ${ROUTER_TARGET} mapping.`);
   }
+  const media = normalized[MEDIA_TARGET];
+  if (!media || media.length !== 1) {
+    throw new Error(`Box PortBindings must contain exactly one ${MEDIA_TARGET} mapping.`);
+  }
   const selectedRouterHostPort = router[0].HostPort;
-  const expected = expectedBindings(selectedRouterHostPort);
+  const selectedMediaHostPort = media[0].HostPort;
+  const expected = expectedBindings(selectedRouterHostPort, selectedMediaHostPort);
   if (JSON.stringify(normalized) !== JSON.stringify(expected)) {
     throw new Error(`Box normalized PortBindings must equal ${JSON.stringify(expected)}; got ${JSON.stringify(normalized)}.`);
   }
-  return { normalized, selectedRouterHostPort };
+  return { normalized, selectedRouterHostPort, selectedMediaHostPort };
 }
 
 function isoTime(value, name) {
@@ -307,11 +313,12 @@ export function buildBoxEvidence({
   if (JSON.stringify(imageConfig.Entrypoint || []) !== JSON.stringify(['/usr/local/bin/ploinky-box-entrypoint'])) {
     throw new Error('Box image entrypoint is invalid.');
   }
-  const { normalized, selectedRouterHostPort } = assertExactBindings(container?.HostConfig?.PortBindings);
+  const { normalized, selectedRouterHostPort, selectedMediaHostPort } = assertExactBindings(container?.HostConfig?.PortBindings);
   const securityOptions = exactBoxSecurityOptions(container?.HostConfig?.SecurityOpt);
   const semanticLabels = exactBoxLabels(container?.Config?.Labels || {}, {
     expectedImageRef,
     selectedRouterHostPort,
+    selectedMediaHostPort,
   });
   return validateBoxEvidence({
     containerName,
@@ -357,8 +364,8 @@ export function validateBoxEvidence(input, {
   if (evidence.publicIPv4 !== publicIPv4) throw new Error('Box evidence public IPv4 mismatch.');
   const startedAt = isoTime(evidence.startedAt, 'Box evidence startedAt');
   const selectedRouterHostPort = exactPort(evidence.selectedRouterHostPort, 'Box evidence selectedRouterHostPort');
-  const normalized = normalizeOuterPortBindings(evidence.normalizedPortBindings);
-  if (JSON.stringify(normalized) !== JSON.stringify(expectedBindings(selectedRouterHostPort))) {
+  const { normalized, selectedMediaHostPort } = assertExactBindings(evidence.normalizedPortBindings);
+  if (JSON.stringify(normalized) !== JSON.stringify(expectedBindings(selectedRouterHostPort, selectedMediaHostPort))) {
     throw new Error('Box evidence normalized PortBindings are not the exact two-publication boundary.');
   }
   const securityOptions = exactBoxSecurityOptions(evidence.securityOptions);
@@ -367,7 +374,7 @@ export function validateBoxEvidence(input, {
       label,
       evidence.semanticLabels?.[name],
     ])),
-    { expectedImageRef, selectedRouterHostPort },
+    { expectedImageRef, selectedRouterHostPort, selectedMediaHostPort },
   );
   return Object.freeze({
     containerName: evidence.containerName,
@@ -392,6 +399,9 @@ export function validateExternalTcpNegativeEvidence(input, {
   nowMs = Date.now(),
   maxAgeMs = 15 * 60_000,
 } = {}) {
+  if (boxEvidence?.semanticLabels?.mediaHostPort !== '7882') {
+    throw new Error('External TCP-negative evidence requires the Box publication on fixed UDP host port 7882.');
+  }
   const evidence = record(input, 'external TCP-negative evidence');
   if (evidence.runId !== runId) throw new Error('External TCP-negative evidence runId mismatch.');
   if (evidence.containerName !== boxEvidence.containerName) throw new Error('External TCP-negative evidence container mismatch.');

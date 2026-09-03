@@ -26,16 +26,20 @@ function container(bindings, overrides = {}) {
     Name: '/ploinky-box-screen',
     Image: IMAGE_ID,
     State: { Running: true, StartedAt: '2026-07-16T10:05:00.000Z' },
-    Config: { Labels: { 'io.assistos.ploinky-box.role': 'box' } },
+    Config: { Labels: {
+      'io.assistos.ploinky-box.role': 'box',
+      'io.assistos.ploinky-box.router-host-port': bindings['8080/tcp']?.[0]?.HostPort,
+      'io.assistos.ploinky-box.media-host-port': bindings['7882/udp']?.[0]?.HostPort,
+    } },
     HostConfig: { PortBindings: bindings },
     ...overrides,
   };
 }
 
-function exactBindings(port = '8080') {
+function exactBindings(port = '8080', mediaPort = '7882') {
   return {
     '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: port }],
-    '7882/udp': [{ HostIp: '', HostPort: '7882' }],
+    '7882/udp': [{ HostIp: '', HostPort: mediaPort }],
   };
 }
 
@@ -99,6 +103,77 @@ test('live Box URL and container discovery require the exact loopback boundary',
   assert.throws(() => selectLocalScreenContainer([
     container({ ...exactBindings(), '8081/tcp': [{ HostIp: '127.0.0.1', HostPort: '8081' }] }),
   ], '8080'), /found 0/);
+});
+
+test('live Box discovery isolates coexisting Boxes by their selected Router and labeled media ports', () => {
+  const ordinary = container(exactBindings('18080', '7882'));
+  const isolated = container(exactBindings('28080', '27882'), {
+    Id: 'd'.repeat(64), Name: '/ploinky-box-isolated',
+  });
+  const containers = [ordinary, isolated];
+  const before = structuredClone(containers);
+  assert.equal(selectLocalScreenContainer(containers, '28080'), isolated);
+  assert.equal(selectLocalScreenContainer(containers, '18080'), ordinary);
+  assert.deepEqual(containers, before);
+  assert.throws(() => selectLocalScreenContainer(containers, '38080'), /found 0/);
+  assert.throws(() => selectLocalScreenContainer([
+    isolated,
+    container(exactBindings('28080', '37882'), { Id: 'e'.repeat(64) }),
+  ], '28080'), /found 2/);
+});
+
+test('live Box discovery rejects missing, malformed, or mismatched port labels', () => {
+  for (const label of ['router-host-port', 'media-host-port']) {
+    for (const value of [undefined, '', '0', '-1', '65536', '27882.5', '027882', ' 27882 ', '1e4', 'wrong', '7881']) {
+      const candidate = container(exactBindings('28080', '27882'));
+      const key = `io.assistos.ploinky-box.${label}`;
+      if (value === undefined) delete candidate.Config.Labels[key];
+      else candidate.Config.Labels[key] = value;
+      assert.throws(() => selectLocalScreenContainer([candidate], '28080'), /found 0/);
+    }
+  }
+});
+
+test('live Box discovery preserves exact target, protocol, IP, and mapping-count boundaries with an alternate media port', () => {
+  const candidate = container(exactBindings('28080', '27882'));
+  for (const bindings of [
+    { ...exactBindings('28080', '27882'), '8081/tcp': [{ HostIp: '127.0.0.1', HostPort: '28081' }] },
+    { ...exactBindings('28080', '27882'), '7882/udp': [
+      { HostIp: '0.0.0.0', HostPort: '27882' }, { HostIp: '0.0.0.0', HostPort: '37882' },
+    ] },
+    { ...exactBindings('28080', '27882'), '8080/tcp': [
+      { HostIp: '127.0.0.1', HostPort: '28080' }, { HostIp: '127.0.0.1', HostPort: '38080' },
+    ] },
+    { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '28080' }], '7882/tcp': [{ HostIp: '0.0.0.0', HostPort: '27882' }] },
+    { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '28080' }], '7881/udp': [{ HostIp: '0.0.0.0', HostPort: '27882' }] },
+    { ...exactBindings('28080', '27882'), '8080/tcp': [{ HostIp: '0.0.0.0', HostPort: '28080' }] },
+    { ...exactBindings('28080', '27882'), '7882/udp': [{ HostIp: '127.0.0.1', HostPort: '27882' }] },
+    { ...exactBindings('28080', '27882'), '7882/udp': [{ HostIp: '::', HostPort: '27882' }] },
+    { ...exactBindings('28080', '27882'), '7882/udp': [{ HostIp: '0.0.0.0', HostPort: ' 27882 ' }] },
+  ]) {
+    assert.throws(() => selectLocalScreenContainer([
+      { ...candidate, HostConfig: { PortBindings: bindings } },
+    ], '28080'), /found 0/);
+  }
+});
+
+test('alternate media port evidence remains bound to both labels and the exact pre/post publication', () => {
+  const before = evidence();
+  before.box.baseURL = 'http://127.0.0.1:28080';
+  before.box.selectedRouterHostPort = '28080';
+  before.box.semanticLabels.routerHostPort = '28080';
+  before.box.semanticLabels.mediaHostPort = '27882';
+  before.box.normalizedPortBindings = exactBindings('28080', '27882');
+  const context = { baseURL: before.box.baseURL, nowMs: NOW };
+  const validated = validateLiveBoxEvidence(before, context);
+  assert.equal(validated.box.semanticLabels.mediaHostPort, '27882');
+  assert.equal(sameLiveBoxGeneration(validated, structuredClone(validated)), true);
+
+  const after = structuredClone(before);
+  after.box.semanticLabels.mediaHostPort = '37882';
+  assert.throws(() => validateLiveBoxEvidence(after, context), /media-host-port label does not match/);
+  after.box.normalizedPortBindings = exactBindings('28080', '37882');
+  assert.equal(sameLiveBoxGeneration(validated, validateLiveBoxEvidence(after, context)), false);
 });
 
 test('live Box evidence is exact, fresh, and generation-comparable', () => {

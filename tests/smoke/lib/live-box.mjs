@@ -11,6 +11,8 @@ import {
 
 const BOX_ROLE_LABEL = 'io.assistos.ploinky-box.role';
 const BOX_IMAGE_REF_LABEL = 'io.assistos.ploinky-box.image-ref';
+const BOX_ROUTER_HOST_PORT_LABEL = 'io.assistos.ploinky-box.router-host-port';
+const BOX_MEDIA_HOST_PORT_LABEL = 'io.assistos.ploinky-box.media-host-port';
 const DEFAULT_GENERATION_MAX_AGE_MS = 30 * 60_000;
 const DEFAULT_IMAGE_MAX_AGE_MS = 4 * 60 * 60_000;
 const PLOINKY_SOURCE_DESTINATION = '/opt/ploinky';
@@ -304,27 +306,29 @@ export function parseLocalScreenBaseUrl(baseURL) {
   return Object.freeze({ baseURL: `http://127.0.0.1:${port}`, port });
 }
 
-function exactScreenBindings(port) {
+function exactScreenBindings(port, mediaPort) {
   return normalizeOuterPortBindings({
     '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: port }],
-    '7882/udp': [{ HostIp: '0.0.0.0', HostPort: '7882' }],
+    '7882/udp': [{ HostIp: '0.0.0.0', HostPort: mediaPort }],
   });
 }
 
 export function selectLocalScreenContainer(containerInspects, port) {
   if (!Array.isArray(containerInspects)) throw new Error('Running outer container inspection must be an array.');
-  const expected = JSON.stringify(exactScreenBindings(port));
   const candidates = containerInspects.filter((container) => {
     if (container?.State?.Running !== true) return false;
-    if (container?.Config?.Labels?.[BOX_ROLE_LABEL] !== 'box') return false;
+    const labels = container?.Config?.Labels;
+    if (labels?.[BOX_ROLE_LABEL] !== 'box') return false;
+    if (labels[BOX_ROUTER_HOST_PORT_LABEL] !== String(port)) return false;
     try {
+      const expected = JSON.stringify(exactScreenBindings(port, labels[BOX_MEDIA_HOST_PORT_LABEL]));
       return JSON.stringify(normalizeOuterPortBindings(container?.HostConfig?.PortBindings)) === expected;
     } catch (_) {
       return false;
     }
   });
   if (candidates.length !== 1) {
-    throw new Error(`SMOKE_WEBMEET_SCREEN requires exactly one running Box outer container with the exact 127.0.0.1:${port}:8080/tcp and 0.0.0.0:7882:7882/udp publications; found ${candidates.length}.`);
+    throw new Error(`SMOKE_WEBMEET_SCREEN requires exactly one running Box outer container with the exact 127.0.0.1:${port}:8080/tcp and 0.0.0.0:<media-host-port label>:7882/udp publications; found ${candidates.length}.`);
   }
   return candidates[0];
 }

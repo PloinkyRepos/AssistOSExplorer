@@ -346,7 +346,17 @@ Run the same gate against a fresh Ploinky Box deployment with:
 SMOKE_DEPLOYMENT_MODE=box SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
 ```
 
-In Box mode, exactly one outer container must publish
+Shared local Box discovery, including the headless acceptance gates, supports
+isolated deployments such as Router TCP `28080` and media UDP `27882` alongside
+another Box. Exactly one running Box must match the selected loopback Router
+port; its only other publication must be
+`0.0.0.0:<media-host-port label>:7882/udp`. Both host ports must match the
+immutable Box labels, and missing, malformed, mismatched, or additional
+publications fail. This does not change the fixed UDP `7882` scanner and ICE
+requirements of the screen-share and external-network gates below; those gates
+reject an alternate media host port.
+
+For the screen-share gate in Box mode, exactly one outer container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
 `0.0.0.0:7882:7882/udp`, carry the exact semantic Box ownership labels, and use a freshly built
 image. Those labels include the exact AgentLib selection identity; missing,
