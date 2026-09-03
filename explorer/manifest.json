@@ -30,6 +30,7 @@
         "dpuAgent global",
         "soplangAgent global no-wait",
         "tasksAgent global",
+        "AchillesCLI/roboTeamAgent global no-wait",
         "AchillesCLI/achilles-cli global no-wait",
         "webmeetInfra/liveKitServerAgent no-wait",
         "webmeetStt no-wait",

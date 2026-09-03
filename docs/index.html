@@ -92,6 +92,9 @@
                 or discovered from verified <code>IDE-plugins</code> manifests. Each owning agent remains responsible
                 for its domain behavior, authorization, and protected state. Runtime-owned workspace data volumes live below
                 <code>.data/</code>; <code>.ploinky/repos</code> is the single named source-state volume exception.</p>
+            <p>Fresh deployments require an <code>AdvancedLanguageAgent</code> checkout at the workspace root
+                with its selected <code>achillesAgentLib</code> dependency available. Explorer enables RoboTeam
+                globally before Achilles CLI so both agents can use that workspace checkout during startup.</p>
 
             <h3>Application Agents and Plugins</h3>
             <div class="agent-grid">
