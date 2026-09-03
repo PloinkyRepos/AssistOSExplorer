@@ -1,8 +1,9 @@
 import { signIn } from '../lib/auth.mjs';
 import { smokeConfig } from '../lib/config.mjs';
-import { expect, test } from '../lib/fixtures.mjs';
+import { acknowledgeExactPageDiagnostics, checkpointPageDiagnostics, expect, test } from '../lib/fixtures.mjs';
 import { findSecretLeaks } from '../lib/security.mjs';
 import { beginUmamiSignedOutProof, verifyUmamiBrowserAuthorization } from '../lib/umami-auth-diagnostics.mjs';
+import { installUmamiRscDiagnostics } from '../lib/umami-rsc-diagnostics.mjs';
 
 const DASHBOARD_PREFIX = '/base-agent-additional-server/umamiAgent/3000/';
 
@@ -53,6 +54,10 @@ test.describe('Umami Router publication @external', () => {
     const routerOrigin = new URL(smokeConfig.baseURL).origin;
     const loginUrl = new URL(`${DASHBOARD_PREFIX}api/auth/login`, routerOrigin).href;
     const verifyUrl = new URL(`${DASHBOARD_PREFIX}api/auth/verify`, routerOrigin).href;
+    const rscDiagnostics = await installUmamiRscDiagnostics(page, {
+      origin: routerOrigin,
+      publicationPath: DASHBOARD_PREFIX.slice(0, -1),
+    });
 
     const requests = [];
     const documentResponses = [];
@@ -103,6 +108,8 @@ test.describe('Umami Router publication @external', () => {
     await expect(usernameInput, 'Umami must retain its defense-in-depth login').toBeVisible();
     await expect(passwordInput).toBeVisible();
     const signedOut = await assertSignedOut();
+    await rscDiagnostics.beginAuthenticatedPhase();
+    const authenticatedDiagnostics = checkpointPageDiagnostics(page, 'Umami authenticated response completion');
     const loginResponsePromise = page.waitForResponse(
       (candidate) => candidate.url() === loginUrl && candidate.request().method() === 'POST',
       { timeout: smokeConfig.timeouts.navigation },
@@ -201,6 +208,12 @@ test.describe('Umami Router publication @external', () => {
       if (pathname === new URL(page.url()).pathname && new URL(url).hash) continue;
       expect(isPublishedPath(pathname), `root-relative Umami DOM URL leaked: ${url}`).toBe(true);
     }
+
+    const completion = await rscDiagnostics.drainAndProve({ timeout: smokeConfig.timeouts.navigation });
+    expect(postLoginDocuments, 'successful Umami login must not reload its login document during drain').toEqual([]);
+    expect(dashboardDocuments, 'Umami Dashboard must remain in the same document during drain').toEqual([]);
+    await attachEvidence(testInfo, 'umami-rsc-response-completion', completion.proof);
+    acknowledgeExactPageDiagnostics(page, authenticatedDiagnostics, completion.expectedSignatures);
 
     await attachEvidence(testInfo, 'umami-dashboard-routing', {
       finalUrl: urlEvidence(page.url()),
