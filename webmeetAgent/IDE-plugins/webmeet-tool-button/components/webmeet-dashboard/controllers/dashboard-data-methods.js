@@ -362,16 +362,23 @@ export const dashboardDataMethods = {
         let agentPayload = { agents: [] };
         try {
             const canManageMeetingData = this.canManageRooms();
+            const detailsPromise = this.fetchMeetingSnapshot(meeting.id, { includeParticipants });
+            const dataPromise = Promise.all([
+                runTool('webmeet_chat_list', { meetingId: meeting.id }),
+                canManageMeetingData
+                    ? runTool('webmeet_resource_list', { meetingId: meeting.id })
+                    : Promise.resolve(resourcePayload)
+            ]).then(
+                (value) => ({ status: 'fulfilled', value }),
+                (reason) => ({ status: 'rejected', reason })
+            );
+            // Snapshot errors surface immediately; concurrent data failures are already handled.
+            detailsPayload = await detailsPromise;
+            const dataResult = await dataPromise;
+            if (dataResult.status === 'rejected') throw dataResult.reason;
+            [chatPayload, resourcePayload] = dataResult.value;
             if (canManageMeetingData) {
-                detailsPayload = await this.fetchMeetingSnapshot(meeting.id, { includeParticipants });
-                [chatPayload, resourcePayload] = await Promise.all([
-                    runTool('webmeet_chat_list', { meetingId: meeting.id }),
-                    runTool('webmeet_resource_list', { meetingId: meeting.id })
-                ]);
                 agentPayload = { agents: Array.isArray(detailsPayload?.agents) ? detailsPayload.agents : [] };
-            } else {
-                detailsPayload = await this.fetchMeetingSnapshot(meeting.id, { includeParticipants });
-                chatPayload = await runTool('webmeet_chat_list', { meetingId: meeting.id });
             }
         } catch (error) {
             if (loadSeq !== this.meetingDetailsLoadSeq || this.state.selectedMeetingId !== meeting.id) return;
