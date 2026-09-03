@@ -40,6 +40,32 @@ SMOKE_BASE_URL=https://skills.axiologic.dev \
 npm test
 ```
 
+For a fresh loopback release fixture that deliberately uses the managed local
+model, configure deterministic generation after Explorer, Soul Gateway, and
+`proxies/default-local-llm` are running in the same deployment generation. Wait
+for full graph readiness before running the unchanged release gates:
+
+```bash
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
+SMOKE_AUTH_AGENT=explorer \
+SMOKE_USERNAME=admin \
+SMOKE_PASSWORD=admin \
+node scripts/configure-local-model.mjs
+```
+
+The command accepts only an HTTP `127.0.0.1` Router origin and the
+Explorer login agent. It uses the normal authenticated Explorer login, requires
+exactly one provider with provider key
+`agent:proxies/default-local-llm` and adapter `ploinky-agent-openai`, and merges
+`settings.extra_body.temperature: 0` into that provider through Soul Gateway's
+supported management API. Before its single update, it polls the authenticated
+provider list for up to 90 seconds for registration; a wrong adapter or duplicate
+provider fails immediately. It verifies the complete persisted settings so an
+unrelated field or key change fails the setup. Output contains only provider
+identity, update status, and temperature; credentials, settings, and response
+bodies are never written to artifacts or logs. This is a local fixture setup
+step and does not replace or change a release gate.
+
 Run the dedicated public QA acceptance gate in headless Chromium with:
 
 ```bash
