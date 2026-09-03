@@ -58,6 +58,7 @@ export async function configureLocalModelProvider(input, fetchImpl = globalThis.
   const managementPath = '/base-agent-additional-server/soul-gateway/7000/management';
   const now = timing.now || Date.now;
   const wait = timing.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const unavailable = Object.freeze({ unavailable: true });
   const fail = (code, message) => {
     const error = new Error(message);
     error.code = code;
@@ -79,15 +80,27 @@ export async function configureLocalModelProvider(input, fetchImpl = globalThis.
     return JSON.stringify(value);
   };
   const readProvider = async (allowMissing = false, timeoutMs = 90_000) => {
-    const response = await fetchImpl(`${managementPath}/providers`, {
-      method: 'GET',
-      credentials: 'include',
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    let response;
+    try {
+      response = await fetchImpl(`${managementPath}/providers`, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (_) {
+      return unavailable;
+    }
+    if ([502, 503, 504].includes(Number(response?.status))) return unavailable;
     if (!response?.ok) fail('PROVIDER_LIST_FAILED', `Provider list failed with HTTP ${Number(response?.status || 0) || 'unknown'}.`);
-    const payload = await response.json().catch(() => null);
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      if (error?.name === 'TypeError' || error?.name === 'AbortError') return unavailable;
+      fail('INVALID_PROVIDER_LIST', 'Provider list response is not valid JSON.');
+    }
     const providers = exactObject(payload, 'INVALID_PROVIDER_LIST', 'Provider list').data;
     if (!Array.isArray(providers)) fail('INVALID_PROVIDER_LIST', 'Provider list data is invalid.');
     const matches = providers.filter((provider) => provider?.provider_key === expectedProviderKey);
@@ -112,15 +125,18 @@ export async function configureLocalModelProvider(input, fetchImpl = globalThis.
     || input?.temperature !== 0 || input?.managementPath !== managementPath) {
     fail('INVALID_CONFIGURATION_TARGET', 'Local model fixture target is invalid.');
   }
-  const deadline = now() + 90_000;
-  let before;
-  while (!before) {
-    const remaining = deadline - now();
-    if (remaining <= 0) fail('LOCAL_PROVIDER_NOT_READY', 'Local provider registration did not become ready within 90 seconds.');
-    before = await readProvider(true, remaining);
-    if (now() >= deadline) fail('LOCAL_PROVIDER_NOT_READY', 'Local provider registration did not become ready within 90 seconds.');
-    if (!before) await wait(Math.min(1_000, Math.max(0, deadline - now())));
-  }
+  const pollProvider = async (allowMissing, timeoutCode) => {
+    const deadline = now() + 90_000;
+    while (true) {
+      const remaining = deadline - now();
+      if (remaining <= 0) fail(timeoutCode, 'Local provider did not become readable within 90 seconds.');
+      const result = await readProvider(allowMissing, remaining);
+      if (result !== unavailable && result !== null) return result;
+      if (now() >= deadline) fail(timeoutCode, 'Local provider did not become readable within 90 seconds.');
+      await wait(Math.min(1_000, Math.max(0, deadline - now())));
+    }
+  };
+  const before = await pollProvider(true, 'LOCAL_PROVIDER_NOT_READY');
   const expectedSettings = {
     ...before.settings,
     extra_body: { ...before.extraBody, temperature: 0 },
@@ -135,7 +151,7 @@ export async function configureLocalModelProvider(input, fetchImpl = globalThis.
     },
   );
   if (!response?.ok) fail('PROVIDER_UPDATE_FAILED', `Provider update failed with HTTP ${Number(response?.status || 0) || 'unknown'}.`);
-  const after = await readProvider();
+  const after = await pollProvider(false, 'PROVIDER_READBACK_TIMEOUT');
   if (after.provider.id !== before.provider.id
     || canonicalJson(after.settings) !== canonicalJson(expectedSettings)) {
     fail('PROVIDER_UPDATE_MISMATCH', 'Local provider settings changed outside the requested temperature update.');
@@ -194,6 +210,7 @@ async function main() {
       'INVALID_PROVIDER_LIST',
       'LOCAL_PROVIDER_MISMATCH',
       'LOCAL_PROVIDER_NOT_READY',
+      'PROVIDER_READBACK_TIMEOUT',
       'INVALID_LOCAL_PROVIDER',
       'PROVIDER_UPDATE_FAILED',
       'PROVIDER_UPDATE_MISMATCH',

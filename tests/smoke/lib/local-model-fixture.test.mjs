@@ -211,27 +211,32 @@ test('absent local provider registration is polled before exactly one update', a
   const result = await configureLocalModelProvider(target, async (_url, options) => {
     methods.push(options.method);
     if (options.method === 'PATCH') {
-      assert.ok(reads >= 3, 'provider must be registered before mutation');
+      assert.ok(reads >= 7, 'provider must be registered before mutation');
       settings = JSON.parse(options.body).settings;
       return { ok: true, status: 200 };
     }
     reads += 1;
+    if (reads === 1) throw new TypeError('temporary transport failure');
+    if (reads <= 4) return { ok: false, status: 500 + reads };
+    if (reads === 5) {
+      return { ok: true, status: 200, json: async () => { throw new TypeError('body transport failure'); } };
+    }
     return {
       ok: true,
       status: 200,
-      json: async () => ({ data: reads < 3 ? [] : [localProvider(settings)] }),
+      json: async () => ({ data: reads < 7 ? [] : [localProvider(settings)] }),
     };
   }, {
     now: () => elapsed,
     wait: async (ms) => { elapsed += ms; },
   });
   assert.ok(elapsed > 0 && elapsed < 90_000);
-  assert.deepEqual(methods, ['GET', 'GET', 'GET', 'PATCH', 'GET']);
+  assert.deepEqual(methods, ['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'PATCH', 'GET']);
   assert.equal(result.temperature, 0);
   assert.equal(settings.extra_body.top_p, 0.5);
 });
 
-test('missing registration times out without mutation and duplicate rows fail without polling', async () => {
+test('transient registration failures time out without mutation and duplicate rows fail without polling', async () => {
   let elapsed = 0;
   const methods = [];
   const timing = {
@@ -240,7 +245,7 @@ test('missing registration times out without mutation and duplicate rows fail wi
   };
   await assert.rejects(configureLocalModelProvider(target, async (_url, options) => {
     methods.push(options.method);
-    return { ok: true, status: 200, json: async () => ({ data: [] }) };
+    return { ok: false, status: 503 };
   }, timing), (error) => error.code === 'LOCAL_PROVIDER_NOT_READY');
   assert.equal(elapsed, 90_000);
   assert.ok(methods.length > 1);
@@ -257,4 +262,48 @@ test('missing registration times out without mutation and duplicate rows fail wi
   }, timing), (error) => error.code === 'LOCAL_PROVIDER_MISMATCH');
   assert.equal(elapsed, 0);
   assert.deepEqual(methods, ['GET']);
+});
+
+test('post-update readback retries only transient GET failures without repeating the PATCH', async () => {
+  let elapsed = 0;
+  let reads = 0;
+  let patches = 0;
+  let settings = { api_key: 'preserved', extra_body: { top_p: 0.5 } };
+  const result = await configureLocalModelProvider(target, async (_url, options) => {
+    if (options.method === 'PATCH') {
+      patches += 1;
+      settings = JSON.parse(options.body).settings;
+      return { ok: true, status: 204 };
+    }
+    reads += 1;
+    if (patches === 1 && reads === 2) return { ok: false, status: 502 };
+    if (patches === 1 && reads === 3) throw new TypeError('temporary transport failure');
+    return { ok: true, status: 200, json: async () => ({ data: [localProvider(settings)] }) };
+  }, {
+    now: () => elapsed,
+    wait: async (ms) => { elapsed += ms; },
+  });
+  assert.equal(patches, 1);
+  assert.equal(reads, 4);
+  assert.equal(elapsed, 2_000);
+  assert.equal(result.status, 204);
+});
+
+test('authorization, unsupported statuses, and malformed provider lists fail without waiting', async () => {
+  for (const status of [401, 403, 404, 429, 500]) {
+    let waits = 0;
+    await assert.rejects(configureLocalModelProvider(target, async () => ({ ok: false, status }), {
+      now: () => 0,
+      wait: async () => { waits += 1; },
+    }), (error) => error.code === 'PROVIDER_LIST_FAILED');
+    assert.equal(waits, 0);
+  }
+  await assert.rejects(configureLocalModelProvider(target, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => { throw new SyntaxError('malformed JSON'); },
+  }), {
+    now: () => 0,
+    wait: async () => { throw new Error('malformed responses must not retry'); },
+  }), (error) => error.code === 'INVALID_PROVIDER_LIST');
 });

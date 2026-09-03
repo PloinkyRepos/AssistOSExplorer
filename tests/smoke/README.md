@@ -59,12 +59,13 @@ exactly one provider with provider key
 `agent:proxies/default-local-llm` and adapter `ploinky-agent-openai`, and merges
 `settings.extra_body.temperature: 0` into that provider through Soul Gateway's
 supported management API. Before its single update, it polls the authenticated
-provider list for up to 90 seconds for registration; a wrong adapter or duplicate
-provider fails immediately. It verifies the complete persisted settings so an
-unrelated field or key change fails the setup. Output contains only provider
-identity, update status, and temperature; credentials, settings, and response
-bodies are never written to artifacts or logs. This is a local fixture setup
-step and does not replace or change a release gate.
+provider list for up to 90 seconds for registration, retrying only transport and
+HTTP 502/503/504 failures. A wrong adapter, duplicate provider, unauthorized
+response, or malformed response fails immediately. It verifies the complete
+persisted settings so an unrelated field or key change fails the setup. Output
+contains only provider identity, update status, and temperature; credentials,
+settings, and response bodies are never written to artifacts or logs. This is a
+local fixture setup step and does not replace or change a release gate.
 
 Run the dedicated public QA acceptance gate in headless Chromium with:
 
