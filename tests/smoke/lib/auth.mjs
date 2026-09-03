@@ -100,12 +100,22 @@ export async function signIn(
   }
 
   const smokeOrigin = new URL(smokeConfig.baseURL).origin;
+  // The Router SSO landing page redirects after load; wait before choosing a form.
+  await expect.poll(async () => {
+    const currentUrl = new URL(page.url());
+    return currentUrl.origin !== smokeOrigin
+      || currentUrl.pathname !== '/auth/login'
+      || await loginForm(page).isVisible().catch(() => false);
+  }, {
+    timeout: smokeConfig.timeouts.navigation,
+    message: 'Authentication did not reach a login form or redirect destination.',
+  }).toBe(true);
   const loginUrl = new URL(page.url());
   if (loginUrl.origin !== smokeOrigin) {
     throw new Error('Authentication left the configured smoke origin.');
   }
   if (loginUrl.pathname === '/auth/login'
-    && await loginForm(page).isVisible({ timeout: 3_000 }).catch(() => false)) {
+    && await loginForm(page).isVisible().catch(() => false)) {
     await page.locator('input#username, input[name="username"]').first().fill(account.username);
     await page.locator('input#password, input[name="password"]').first().fill(account.password);
     await Promise.all([

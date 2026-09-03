@@ -15,6 +15,7 @@ test('authentication visits only its final surface and preserves a separate serv
   ]));
   let account = localAccount;
   let sso = false;
+  let redirectDelay = 0;
   let loginPath = providerPath;
   let loginOrigin = '';
   let needsInitialAdmin = false;
@@ -32,8 +33,14 @@ test('authentication visits only its final surface and preserves a separate serv
     }
     if (url.pathname === '/auth/login' && incoming.method === 'GET' && sso) {
       returnTo = url.searchParams.get('returnTo');
-      response.writeHead(302, { location: `${loginOrigin}${loginPath}?requestId=fixture-state&state=fixture-state` });
-      response.end();
+      const destination = `${loginOrigin}${loginPath}?requestId=fixture-state&state=fixture-state`;
+      if (redirectDelay) {
+        response.setHeader('content-type', 'text/html');
+        response.end(`<h1>Continue to sign in</h1><script>window.setTimeout(() => window.location.replace(${JSON.stringify(destination)}), ${redirectDelay});</script>`);
+      } else {
+        response.writeHead(302, { location: destination });
+        response.end();
+      }
       return;
     }
     if (url.pathname.startsWith(loginPath) && sso) {
@@ -106,9 +113,11 @@ test('authentication visits only its final surface and preserves a separate serv
   let browser;
   try {
     browser = await chromium.launch();
-    for (const useSso of [false, true]) {
-      await t.test(useSso ? 'UserPersisto email sign-in' : 'local username sign-in', async () => {
+    for (const mode of ['local', 'immediate SSO', 'delayed frontend SSO']) {
+      const useSso = mode !== 'local';
+      await t.test(`${mode} sign-in`, async () => {
         sso = useSso;
+        redirectDelay = mode === 'delayed frontend SSO' ? 250 : 0;
         account = useSso ? providerAccount : localAccount;
         requests.length = 0;
         const context = await browser.newContext({ baseURL });
@@ -148,26 +157,34 @@ test('authentication visits only its final surface and preserves a separate serv
       });
     }
     for (const scenario of ['initial setup', 'different same-origin path', 'different origin']) {
-      await t.test(`does not submit credentials to ${scenario}`, async () => {
-        sso = true;
-        account = providerAccount;
-        needsInitialAdmin = scenario === 'initial setup';
-        loginPath = scenario === 'different same-origin path' ? '/other-service/auth/' : providerPath;
-        loginOrigin = scenario === 'different origin' ? baseURL.replace('127.0.0.1', 'localhost') : '';
-        requests.length = 0;
-        const context = await browser.newContext({ baseURL });
-        const page = await context.newPage();
-        try {
-          await assert.rejects(signIn(page, account, '/service/', { requireConfiguredPrincipal: true }));
-          await page.locator('#auth_content form').first().waitFor({ state: 'visible' });
-          assert.equal(requests.filter((entry) => entry.method === 'POST').length, 0);
-          for (const input of await page.locator('input[name="email"], input[name="password"]').all()) {
-            assert.equal(await input.inputValue(), '');
+      for (const delay of [0, 250]) {
+        await t.test(`does not submit credentials to ${scenario} after ${delay ? 'delayed frontend' : 'immediate'} SSO`, async () => {
+          sso = true;
+          redirectDelay = delay;
+          account = providerAccount;
+          needsInitialAdmin = scenario === 'initial setup';
+          loginPath = scenario === 'different same-origin path' ? '/other-service/auth/' : providerPath;
+          loginOrigin = scenario === 'different origin' ? baseURL.replace('127.0.0.1', 'localhost') : '';
+          requests.length = 0;
+          const context = await browser.newContext({ baseURL });
+          const page = await context.newPage();
+          try {
+            const expectedError = scenario === 'initial setup'
+              ? /UserPersisto password sign-in is unavailable/
+              : scenario === 'different origin'
+                ? /Authentication left the configured smoke origin/
+                : /Authenticated identity verification failed with HTTP 401/;
+            await assert.rejects(signIn(page, account, '/service/', { requireConfiguredPrincipal: true }), expectedError);
+            await page.locator('#auth_content form').first().waitFor({ state: 'visible' });
+            assert.equal(requests.filter((entry) => entry.method === 'POST').length, 0);
+            for (const input of await page.locator('input[name="email"], input[name="password"]').all()) {
+              assert.equal(await input.inputValue(), '');
+            }
+          } finally {
+            await context.close();
           }
-        } finally {
-          await context.close();
-        }
-      });
+        });
+      }
     }
   } finally {
     await browser?.close();
