@@ -1115,16 +1115,28 @@ export function createMarkdownCrdtStore({
         history.pop();
         nextModel = cloneJson(undoEntry.beforeModel);
       } else {
-        nextModel = await mutateModel(cloneJson(current.model), current);
+        nextModel = await mutateModel(cloneJson(current.model), current, {
+          proposalAlreadyApplied: Boolean(
+            args.scriptaProposalId && document.scriptaMarkdownProposals?.[args.scriptaProposalId]
+          )
+        });
       }
       if (nextModel === null || nextModel === undefined) {
         if (typeof args.onCompleted === 'function') await args.onCompleted(current);
         return current;
       }
+      if (args.scriptaProposalId) {
+        // Keep retry receipts in canonical private state, outside the public
+        // replica and undo snapshots. Commit/rollback includes this receipt.
+        document = changeDocument(document, (draft) => {
+          draft.scriptaMarkdownProposals ||= {};
+          draft.scriptaMarkdownProposals[args.scriptaProposalId] = true;
+        });
+      }
       if (args.historyAction === 'push') {
         history.push({
           beforeModel: cloneJson(current.model),
-          afterModelHash: modelDigest(nextModel)
+          afterModelHash: modelDigest(ensureDocumentId(nextModel))
         });
         if (history.length > MAX_SCRIPTA_UNDO_STEPS) {
           history.splice(0, history.length - MAX_SCRIPTA_UNDO_STEPS);

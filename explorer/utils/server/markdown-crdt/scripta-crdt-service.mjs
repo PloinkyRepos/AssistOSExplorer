@@ -301,11 +301,15 @@ export function createScriptaCrdtService({
     return binary;
   }
 
-  function meetingNotesActorId(documentId) {
+  function markdownProposalId(baseDocument, markdown, participantHash) {
     return crypto.createHash('sha256')
-      .update(`webmeet-meeting-notes:${safeDocumentId(documentId)}`)
-      .digest('hex')
-      .slice(0, 32);
+      .update(JSON.stringify([
+        safeDocumentId(baseDocument.documentId),
+        getDocumentHeads(baseDocument).sort(),
+        markdown,
+        participantHash
+      ]))
+      .digest('hex');
   }
 
   function variantFor(model, chapterId, paragraphId, variantId) {
@@ -624,26 +628,36 @@ export function createScriptaCrdtService({
     if (!markdown) throw new Error('SCRIPTA collaboration Markdown cannot be empty.');
     const createdBy = String(args.participant?.hash || args.participant?.id || '').trim();
     if (!createdBy) throw new Error('SCRIPTA collaboration Markdown requires a participant identity.');
+    // Every historical proposal is a new writable replica. A document-wide
+    // actor would reuse its sequence when another proposal starts at old heads.
+    const suppliedBase = args.baseStateBase64
+      ? loadDocument(decodeCollaborationState(args.baseStateBase64))
+      : null;
     let committedPublicDocument = null;
     let documentId = '';
     let changed = false;
     const saved = await markdownCrdtStore.mutateAndSave({
       path: args.path,
       historyAction: 'push',
-      onCommitted: async () => {
-        if (changed) await writeCollaborationDocument(documentId, committedPublicDocument);
+      scriptaProposalId: suppliedBase ? markdownProposalId(suppliedBase, markdown, createdBy) : '',
+      onCommitted: async (committed) => {
+        if (changed) {
+          committedPublicDocument = replacePublicModel(committedPublicDocument, committed.model);
+          await writeCollaborationDocument(documentId, committedPublicDocument);
+        }
       }
-    }, async (model) => {
+    }, async (model, current, { proposalAlreadyApplied }) => {
       const currentPublicDocument = await publicDocumentForModel(model);
-      const proposalActor = meetingNotesActorId(model.documentId);
-      const baseDocument = args.baseStateBase64
-        ? loadDocument(decodeCollaborationState(args.baseStateBase64), { actor: proposalActor })
-        : loadDocument(saveDocument(currentPublicDocument), { actor: proposalActor });
+      const baseDocument = suppliedBase || loadDocument(saveDocument(currentPublicDocument));
       if (safeDocumentId(baseDocument.documentId) !== safeDocumentId(currentPublicDocument.documentId)) {
         throw new Error('SCRIPTA collaboration snapshot belongs to another document.');
       }
       if (!documentHasHeads(currentPublicDocument, getDocumentHeads(baseDocument))) {
         throw new Error('SCRIPTA collaboration snapshot is not part of the current document history.');
+      }
+      if (proposalAlreadyApplied) {
+        committedPublicDocument = currentPublicDocument;
+        return null;
       }
       const proposalModel = markdownModelOnBase(clone(baseDocument), markdown, createdBy);
       const proposalDocument = replacePublicModel(baseDocument, proposalModel);

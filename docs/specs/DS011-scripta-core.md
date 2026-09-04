@@ -11,13 +11,15 @@ SCRIPTA is Explorer's structured collaboration model for Markdown documents. Exp
 
 This specification defines the Explorer-owned core. WebMeet board placement, room attachment, guest interaction, RoboTeam event mapping, Meeting Notes, and realtime presentation are integration concerns defined by WebMeet DS009.
 
-## Identity And Storage
+## Core Content
+
+### Identity And Storage
 
 Each document, chapter, paragraph, variant, and variant image has a stable identifier. The document id comes from AssistOS Markdown metadata and remains the identity after rename or move; a filesystem path is only the current location. When a Markdown document has no document id, Explorer generates one and persists it in Markdown during the same first initialization before returning a usable editor or SCRIPTA projection.
 
 Explorer stores canonical binary state at `.data/explorer/automerge/documents/<document-id>.automerge`. SCRIPTA's path-free, sanitized browser replica is stored separately at `.data/explorer/automerge/scripta-collaboration/<document-id>.automerge`. No `.automerge` sidecar is created beside the Markdown file. The canonical state contains the complete private model; the collaboration replica contains only the fields admitted by the public collaboration contract.
 
-## Canonical Markdown Format
+### Canonical Markdown Format
 
 Markdown remains readable without SCRIPTA. The active variant is the visible paragraph text. Stable identity and plugin state are JSON values in the existing `achilles-ide-document`, `achilles-ide-chapter`, and `achilles-ide-paragraph` HTML comments. SCRIPTA does not use a separate YAML `<!-- scripta: ... -->` block.
 
@@ -36,7 +38,7 @@ The selected formulation is visible as ordinary Markdown.
 
 The canonical state is `achilles-ide-paragraph.pluginState.scripta`, represented in the parsed model as both `paragraph.pluginState.scripta` and `paragraph.metadata.pluginState.scripta`. It contains `activeVariantId`, ordered `variants`, and `reactionsByVariant`. Each variant contains its stable id, clean text, ordered images, owner hash, and creation/update timestamps. The serializer writes the winning variant, including its image Markdown, into the visible paragraph and retains inactive variants, reactions, ownership, and stable ids in the metadata comment. User text is stored as text, never pre-escaped HTML; browser rendering must assign it as text or pass it through the approved sanitizer and must never interpret metadata as executable markup.
 
-## Variants, Ownership, And Voting
+### Variants, Ownership, And Voting
 
 Every SCRIPTA paragraph has at least one variant. The participant who creates a variant owns it and is the only participant allowed to edit or delete its text and images. The final remaining variant cannot be deleted. Owner hashes are private authorization data and are never accepted from a browser as proof of identity.
 
@@ -52,25 +54,31 @@ The active variant is selected deterministically by these rules, in order:
 
 After every variant or reaction mutation, Explorer recomputes `activeVariantId` and materializes the winning variant as the paragraph's visible Markdown text.
 
-## Mutations And Collaboration
+### Mutations And Collaboration
 
 Canonical semantic mutations are variant add/edit/delete, vote/vote-withdraw, variant image insert/replace/delete/layout, chapter add/delete/rename/move, paragraph add/delete/move, and undo. AI reformulation is not a persistence mutation: an integration may generate proposed text, but it persists the result through variant add. Focus, selection, edit-start, edit-cancel, and transient draft presentation do not modify the document model.
 
 The public browser replica accepts incremental text changes only for the selected variant edit. Explorer validates that the submitted Automerge changes alter no other public field before merging them into canonical state. Structural operations, voting, ownership-sensitive changes, and media changes always use semantic mutations. Pull is based on `knownHeads`; apply includes the `baseHeads` from which the browser changes were created. If the requested heads are unavailable, Explorer returns `resetRequired` with a replacement state. One request accepts at most 128 changes and 2 MiB of encoded change data.
 
-## Undo
+Markdown proposals based on a collaboration snapshot use a fresh Automerge actor for each writable fork. A document-wide actor must not be reused on historical snapshots: different proposals and delayed retries can otherwise create different changes with the same actor sequence. Explorer validates the snapshot's document identity and heads before accepting a proposal, then merges it with the current public state under the document lock so concurrent edits survive.
+
+For proposals with an explicit base snapshot, Explorer computes a retry identifier from the document identity, sorted base heads, trimmed Markdown, and authenticated participant identity. Accepted identifiers are stored in the private canonical `scriptaMarkdownProposals` map in the same transaction as the model, Markdown, and public replica. They are not browser-supplied receipts, public replica fields, Markdown metadata, or undo snapshots. A failed commit rolls back its receipt; a successful retry returns the current state without another revision or undo entry, including after restart, later edits, or undo. Submitting the same text from new base heads is a new proposal. Receipts remain for the lifetime of the canonical document, matching the retained collaboration history; existing documents without receipts remain readable. The committed public replica reflects the saved canonical model before the response is returned.
+
+Receipt storage and its compaction copy cost grow with the number of accepted snapshot proposals: each adds one 64-character SHA256 key and a Boolean value. Receipts must not be capped while their historical base heads remain admissible. Physical document deletion removes them with canonical state; any future earlier retirement must atomically retire the corresponding public history and reject its old snapshots. Public change actors or messages alone cannot prove acceptance because browser replicas can supply those values. Snapshots accepted before receipt tracking was introduced have no retrospective retry guarantee; integrations must refresh their base after upgrading before resubmitting such proposals.
+
+### Undo
 
 Undo history is private, document-scoped, and bounded to the five most recent accepted SCRIPTA model changes. Every accepted semantic mutation and accepted collaboration edit or Markdown collaboration merge that changes the model pushes the complete pre-change model and the digest of the resulting model. Presentation-only operations do not enter history.
 
-Undo applies only to the newest history entry. Explorer compares the current model digest with that entry's recorded post-change digest. If they differ because another change was accepted after the target operation, undo fails with `scripta_undo_conflict`; it never overwrites the newer state. A successful undo removes that history entry, commits the restored canonical model, rematerializes Markdown, updates the safe projection, and causes browser replicas to pull the new heads or reset when their heads are no longer available.
+Undo applies only to the newest history entry. Explorer compares the current model digest with that entry's recorded post-change digest, computed from the materialized model including its rebuilt structural blocks. If they differ because another change was accepted after the target operation, undo fails with `scripta_undo_conflict`; it never overwrites the newer state. A successful undo removes that history entry, commits the restored canonical model, rematerializes Markdown, updates the safe projection, and causes browser replicas to pull the new heads or reset when their heads are no longer available. Undo does not erase accepted proposal receipts, so a delayed retry cannot reapply an undone proposal.
 
-## Public Projection And Security
+### Public Projection And Security
 
 The canonical Markdown and canonical Automerge state contain ownership and reaction records. They are private workspace data, not encrypted fields inside the Markdown file. The sanitized collaboration replica removes `variant.createdBy` and `reactionsByVariant`. Viewer projections may expose only derived values such as counts, the current viewer's reaction, `canEdit`, and `canDelete`.
 
 Explorer validates workspace paths, stable document identity, operation schemas, participant identity supplied by the authenticated caller, ownership, and resource lifecycle. Guest-facing integrations receive path-free resource identifiers and projections. SCRIPTA text and metadata are data: HTML, event attributes, URLs, and scripts embedded in titles, paragraphs, variants, labels, or metadata must not execute in preview, Blackboard, or editor surfaces.
 
-## Lifecycle And External Changes
+### Lifecycle And External Changes
 
 Create and first open initialize canonical Automerge state and materialize stable metadata atomically. Rename and move preserve the document id and therefore reuse the same canonical state. Save serializes the current canonical state to Markdown. A changed workspace Markdown file is reparsed and imported through Explorer synchronization; direct file content never becomes a competing authority while a canonical state exists.
 
