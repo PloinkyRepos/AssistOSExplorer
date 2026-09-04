@@ -12,6 +12,7 @@ import {
   applyDocumentChanges,
   changeDocument,
   createDocument,
+  documentHasActorChanges,
   documentHasHeads,
   getDocumentChangesSince,
   getDocumentHeads,
@@ -301,11 +302,13 @@ export function createScriptaCrdtService({
     return binary;
   }
 
-  function meetingNotesActorId(documentId) {
+  function meetingNotesActorId(documentId, baseHeads, markdown, participantId) {
     return crypto.createHash('sha256')
-      .update(`webmeet-meeting-notes:${safeDocumentId(documentId)}`)
-      .digest('hex')
-      .slice(0, 32);
+      .update(JSON.stringify([
+        'webmeet-meeting-notes', safeDocumentId(documentId),
+        [...baseHeads].sort(), markdown, participantId
+      ]))
+      .digest('hex');
   }
 
   function variantFor(model, chapterId, paragraphId, variantId) {
@@ -635,18 +638,26 @@ export function createScriptaCrdtService({
       }
     }, async (model) => {
       const currentPublicDocument = await publicDocumentForModel(model);
-      const proposalActor = meetingNotesActorId(model.documentId);
       const baseDocument = args.baseStateBase64
-        ? loadDocument(decodeCollaborationState(args.baseStateBase64), { actor: proposalActor })
-        : loadDocument(saveDocument(currentPublicDocument), { actor: proposalActor });
+        ? loadDocument(decodeCollaborationState(args.baseStateBase64))
+        : currentPublicDocument;
       if (safeDocumentId(baseDocument.documentId) !== safeDocumentId(currentPublicDocument.documentId)) {
         throw new Error('SCRIPTA collaboration snapshot belongs to another document.');
       }
-      if (!documentHasHeads(currentPublicDocument, getDocumentHeads(baseDocument))) {
+      const baseHeads = getDocumentHeads(baseDocument);
+      if (!documentHasHeads(currentPublicDocument, baseHeads)) {
         throw new Error('SCRIPTA collaboration snapshot is not part of the current document history.');
       }
+      const proposalActor = meetingNotesActorId(model.documentId, baseHeads, markdown, createdBy);
+      // The persisted actor history identifies an already accepted proposal even
+      // after restart, without regenerating its timestamps or structural ids.
+      if (documentHasActorChanges(currentPublicDocument, proposalActor)) {
+        committedPublicDocument = currentPublicDocument;
+        return null;
+      }
+      const proposalBase = loadDocument(saveDocument(baseDocument), { actor: proposalActor });
       const proposalModel = markdownModelOnBase(clone(baseDocument), markdown, createdBy);
-      const proposalDocument = replacePublicModel(baseDocument, proposalModel);
+      const proposalDocument = replacePublicModel(proposalBase, proposalModel);
       const mergedPublicDocument = mergeDocuments(currentPublicDocument, proposalDocument);
       documentId = safeDocumentId(model.documentId);
       if (isDeepStrictEqual(clone(mergedPublicDocument), clone(currentPublicDocument))) {

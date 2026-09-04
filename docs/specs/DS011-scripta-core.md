@@ -58,6 +58,8 @@ Canonical semantic mutations are variant add/edit/delete, vote/vote-withdraw, va
 
 The public browser replica accepts incremental text changes only for the selected variant edit. Explorer validates that the submitted Automerge changes alter no other public field before merging them into canonical state. Structural operations, voting, ownership-sensitive changes, and media changes always use semantic mutations. Pull is based on `knownHeads`; apply includes the `baseHeads` from which the browser changes were created. If the requested heads are unavailable, Explorer returns `resetRequired` with a replacement state. One request accepts at most 128 changes and 2 MiB of encoded change data.
 
+Markdown proposals validate their document identity and base heads before merging. Each proposal uses an actor derived from its document, sorted base heads, trimmed Markdown, and authenticated participant. Distinct proposals from the same base must not reuse an actor sequence. Once a proposal is accepted, its persisted collaboration history identifies retries as no-ops, including retries after a clock change or service restart; they return the current merged document without regenerating timestamps or structural ids. A new proposal after an undo must use the new base snapshot.
+
 ## Undo
 
 Undo history is private, document-scoped, and bounded to the five most recent accepted SCRIPTA model changes. Every accepted semantic mutation and accepted collaboration edit or Markdown collaboration merge that changes the model pushes the complete pre-change model and the digest of the resulting model. Presentation-only operations do not enter history.
