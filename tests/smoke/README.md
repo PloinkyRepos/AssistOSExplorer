@@ -280,8 +280,13 @@ diagnostics, navigates that Explorer page to `about:blank`, and keeps the
 terminal's exact prior-epoch transport-error oracle active. Only after a new
 Router identity and healthy authenticated endpoint are verified does it reopen
 Explorer and require clean diagnostics again. Before navigation, WebTTY quiescence
-waits for Explorer's deferred runtime-plugin render chain; both pre-navigation and
-post-navigation diagnostic checks remain strict. Evidence records the quiesce,
+waits for Explorer's deferred runtime-plugin render chain and its outstanding
+finite requests through body completion, including authorization and icon loads
+outside that render chain. Observation begins before the first navigation;
+only successful responses with an exact `text/event-stream` media type are
+excluded from the bounded wait. Failed requests remain diagnostic failures,
+and both pre-navigation and post-navigation checks remain strict. This wait is
+not evidence of a fix for terminal startup or cleanup failures. Evidence records the quiesce,
 Router recovery, and Explorer reopen timestamps; no global error filter is used.
 
 The listener gate always requires `required-loopback`, requires exactly one

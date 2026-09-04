@@ -31,7 +31,25 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+const explorerFiniteRequests = new WeakMap();
+
 async function observeExplorerPluginReadiness(page) {
+  const pending = new Set();
+  const observation = { pending, started: 0 };
+  explorerFiniteRequests.set(page, observation);
+  page.on('request', (request) => {
+    observation.started += 1;
+    pending.add(request);
+  });
+  page.on('requestfinished', (request) => pending.delete(request));
+  page.on('requestfailed', (request) => pending.delete(request));
+  page.on('response', (response) => {
+    // A confirmed SSE response intentionally has no finite body. Every other
+    // request stays pending through its body, including auth and image loads
+    // started by plugins outside the presenter's render promise.
+    const contentType = response.headers()['content-type']?.split(';')[0].trim().toLowerCase();
+    if (response.ok() && contentType === 'text/event-stream') pending.delete(response.request());
+  });
   await page.addInitScript(() => {
     window.__e2eWebttyExplorerPluginsReady = false;
     window.addEventListener('assistos:runtime-plugins-updated', (event) => {
@@ -44,12 +62,25 @@ async function waitForExplorerPluginRender(page, timeout = smokeConfig.timeouts.
   // Shell readiness intentionally precedes plugin discovery. The ready event
   // starts mounting; its presenter promise covers component HTML/CSS/modules
   // and stays non-null until the current (possibly queued) render settles.
-  await page.waitForFunction(() => {
-    if (!window.__e2eWebttyExplorerPluginsReady) return false;
-    const presenter = document.querySelector('file-exp')?.webSkelPresenter;
-    if (!presenter) return false;
-    return !presenter.__appPluginRenderPromise;
-  }, null, { timeout });
+  const observation = explorerFiniteRequests.get(page);
+  if (!observation) throw new Error('Explorer request observation must start before navigation.');
+  await expect.poll(async () => {
+    if (observation.pending.size) return false;
+    const started = observation.started;
+    const rendered = await page.evaluate(async () => {
+      // Body completion may queue a follow-up fetch or an image render. Cross
+      // the next render turn before sampling readiness, then reject this sample
+      // if any request started in that interval. No fixed quiet sleep is used.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!window.__e2eWebttyExplorerPluginsReady) return false;
+      const presenter = document.querySelector('file-exp')?.webSkelPresenter;
+      return Boolean(presenter) && !presenter.__appPluginRenderPromise;
+    });
+    return rendered && observation.pending.size === 0 && observation.started === started;
+  }, {
+    timeout,
+    message: 'Explorer plugin rendering and finite response bodies must settle before navigation',
+  }).toBe(true);
 }
 
 function escapeRegExp(value) {
