@@ -27,6 +27,8 @@ repository revision and the outer Box's locked AgentLib identity. The paired
 destroy workflow requires only its explicit destructive confirmation and
 preserves the deployed runtime as the authority for teardown.
 
+QA also clones `AdvancedLanguageAgent` into the fresh workspace root from its remote default branch and records its exact commit. Before starting Explorer, the workflow links ALA's package dependency to the prepared Box's `/opt/ploinky-agentlib`, exercises the real loader, and checks the CLI options required by RoboTeam. It rejects a second AgentLib copy, a shadowing checkout, incompatible CLI options, or a dirty or moved ALA revision. No separate `npm install` is used for ALA, and this prerequisite does not change the eighteen-agent readiness gate.
+
 Direct operator execution has the same authority and safety boundary. Before a
 destructive or externally visible mutation, positively identify the exact host,
 workspace, environment, revisions, images, and rollback state. Authorization

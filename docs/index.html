@@ -95,6 +95,9 @@
             <p>Fresh deployments require an <code>AdvancedLanguageAgent</code> checkout at the workspace root
                 with its selected <code>achillesAgentLib</code> dependency available. Explorer enables RoboTeam
                 globally before Achilles CLI so both agents can use that workspace checkout during startup.</p>
+            <p>The QA workflow installs ALA from its default branch, verifies its exact clean revision,
+                and binds it to the same Ploinky-selected AgentLib used by the agents. Its preflight exercises
+                the ALA loader and required CLI options before starting the eighteen-agent runtime graph.</p>
 
             <h3>Application Agents and Plugins</h3>
             <div class="agent-grid">
