@@ -83,6 +83,12 @@
                 </section>
                 <section class="history-panel" aria-labelledby="resource-history-title">
                     <div class="history-toolbar">
+                        <div>
+                            <h2 id="resource-history-title">Resource history</h2>
+                            <p data-role="history-state" role="status">Loading history…</p>
+                            <button type="button" class="general-button secondary" data-role="history-retry"
+                                    data-local-action="retryHistory" hidden>Retry history</button>
+                        </div>
                         <div class="history-window-controls">
 
                             <div class="history-presets" role="group" aria-label="History interval presets">
@@ -199,7 +205,9 @@
                     <div class="history-toolbar">
                         <div>
                             <h2 id="runtime-history-title">Selected runtime history</h2>
-                            <p data-role="runtime-history-state">Select a runtime to load its history.</p>
+                            <p data-role="runtime-history-state" role="status">Select a runtime to load its history.</p>
+                            <button type="button" class="general-button secondary" data-role="runtime-history-retry"
+                                    data-local-action="loadSelectedRuntimeHistory" hidden>Retry history</button>
                         </div>
                         <div class="history-window-controls">
                             <div class="history-presets" role="group"
