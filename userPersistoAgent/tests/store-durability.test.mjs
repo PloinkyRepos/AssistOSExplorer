@@ -2,7 +2,7 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { getStore, flush, resetStoreForTests } from '../lib/store.mjs';
@@ -123,6 +123,66 @@ test('legacy files import once and the snapshot becomes authoritative', async ()
     await resetStoreForTests();
     await writeFile(join(folder, user.id), '{corrupt obsolete legacy object');
     assert.equal((await (await getStore()).getUserByEmail('legacy@example.test')).id, user.id);
+});
+
+test('a Ploinky replacement generation reclaims a legacy lock from its predecessor container', async () => {
+    const store = await fixture();
+    const user = await store.createUser({ email: 'box-restart@example.test' });
+    await flush();
+    await resetStoreForTests();
+    await writeFile(join(folder, '.userpersisto.writer.json'), JSON.stringify({
+        pid: 21,
+        hostname: `${hostname()}-predecessor-container`,
+        token: 'legacy-predecessor-token',
+    }));
+    const previousInstanceId = process.env.PLOINKY_AGENT_INSTANCE_ID;
+    const previousGeneration = process.env.PLOINKY_AGENT_ENABLE_GENERATION;
+    process.env.PLOINKY_AGENT_INSTANCE_ID = 'replacement-instance';
+    process.env.PLOINKY_AGENT_ENABLE_GENERATION = 'replacement-generation';
+    try {
+        const reopened = await getStore();
+        assert.equal((await reopened.getUserByEmail('box-restart@example.test')).id, user.id);
+        const owner = JSON.parse(await readFile(join(folder, '.userpersisto.writer.json'), 'utf8'));
+        assert.equal(owner.version, 2);
+        assert.equal(owner.instanceId, 'replacement-instance');
+        assert.equal(owner.enableGeneration, 'replacement-generation');
+    } finally {
+        if (previousInstanceId === undefined) delete process.env.PLOINKY_AGENT_INSTANCE_ID;
+        else process.env.PLOINKY_AGENT_INSTANCE_ID = previousInstanceId;
+        if (previousGeneration === undefined) delete process.env.PLOINKY_AGENT_ENABLE_GENERATION;
+        else process.env.PLOINKY_AGENT_ENABLE_GENERATION = previousGeneration;
+    }
+});
+
+test('current-generation and malformed foreign locks remain fail-closed', async () => {
+    await fixture();
+    await flush();
+    await resetStoreForTests();
+    const previousInstanceId = process.env.PLOINKY_AGENT_INSTANCE_ID;
+    const previousGeneration = process.env.PLOINKY_AGENT_ENABLE_GENERATION;
+    process.env.PLOINKY_AGENT_INSTANCE_ID = 'current-instance';
+    process.env.PLOINKY_AGENT_ENABLE_GENERATION = 'current-generation';
+    try {
+        const lockPath = join(folder, '.userpersisto.writer.json');
+        await writeFile(lockPath, JSON.stringify({
+            version: 2,
+            pid: 21,
+            hostname: `${hostname()}-foreign-container`,
+            token: 'current-generation-owner',
+            instanceId: 'current-instance',
+            enableGeneration: 'current-generation',
+        }));
+        await assert.rejects(getStore(), { code: 'persistence_locked' });
+        await resetStoreForTests().catch(() => {});
+        await writeFile(lockPath, '{"pid":"not-an-owner"}');
+        await assert.rejects(getStore(), { code: 'persistence_locked' });
+        assert.equal(await readFile(lockPath, 'utf8'), '{"pid":"not-an-owner"}');
+    } finally {
+        if (previousInstanceId === undefined) delete process.env.PLOINKY_AGENT_INSTANCE_ID;
+        else process.env.PLOINKY_AGENT_INSTANCE_ID = previousInstanceId;
+        if (previousGeneration === undefined) delete process.env.PLOINKY_AGENT_ENABLE_GENERATION;
+        else process.env.PLOINKY_AGENT_ENABLE_GENERATION = previousGeneration;
+    }
 });
 
 test('a second process cannot open the same store for writing', async () => {

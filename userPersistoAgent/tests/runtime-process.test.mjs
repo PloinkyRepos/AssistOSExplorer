@@ -165,6 +165,39 @@ test('MCP starts after the durable service and drains before HTTP/store; normal 
     assert.deepEqual(await restarted.exited, { code: 0, signal: null }, restarted.output());
 });
 
+test('an abruptly killed runtime is replaced by a new generation without losing its owner', async t => {
+    const root = await fixture(t);
+    const env = await fakeRuntime(root);
+    const runtime = await startRuntime(t, root, { env: {
+        ...env,
+        PLOINKY_AGENT_INSTANCE_ID: 'runtime-instance-before-box-restart',
+        PLOINKY_AGENT_ENABLE_GENERATION: 'runtime-generation-before-box-restart',
+    } });
+    await waitFor(() => existsSync(env.RUNTIME_TEST_STATE), runtime);
+    await registerOwner(runtime);
+    const { pid: agentServerPid } = JSON.parse(await readFile(env.RUNTIME_TEST_STATE, 'utf8'));
+    runtime.child.kill('SIGKILL');
+    assert.deepEqual(await runtime.exited, { code: null, signal: 'SIGKILL' }, runtime.output());
+    try { process.kill(agentServerPid, 'SIGKILL'); } catch (error) {
+        if (error.code !== 'ESRCH') throw error;
+    }
+    assert.equal(existsSync(join(root, 'persisto/.userpersisto.writer.json')), true);
+    await rm(env.RUNTIME_TEST_STATE);
+
+    const restarted = await startRuntime(t, root, { env: {
+        ...env,
+        PLOINKY_AGENT_INSTANCE_ID: 'runtime-instance-after-box-restart',
+        PLOINKY_AGENT_ENABLE_GENERATION: 'runtime-generation-after-box-restart',
+    } });
+    await waitFor(() => existsSync(env.RUNTIME_TEST_STATE), restarted);
+    assert.equal(JSON.parse(await readFile(env.RUNTIME_TEST_STATE, 'utf8')).setup.needsInitialAdmin, false);
+    const lockOwner = JSON.parse(await readFile(join(root, 'persisto/.userpersisto.writer.json'), 'utf8'));
+    assert.equal(lockOwner.instanceId, 'runtime-instance-after-box-restart');
+    assert.equal(lockOwner.enableGeneration, 'runtime-generation-after-box-restart');
+    restarted.child.kill('SIGTERM');
+    assert.deepEqual(await restarted.exited, { code: 0, signal: null }, restarted.output());
+});
+
 test('failed HTTP bind cannot expose MCP and releases the single-writer lock', async t => {
     const root = await fixture(t);
     const env = await fakeRuntime(root);

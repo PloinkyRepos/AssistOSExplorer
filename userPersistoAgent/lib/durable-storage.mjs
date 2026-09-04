@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { open, readFile, readdir, rename, unlink } from 'node:fs/promises';
+import { lstat, open, readFile, readdir, rename, unlink } from 'node:fs/promises';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 export const SNAPSHOT_FILE = '.userpersisto.snapshot.json';
 const LOCK_FILE = '.userpersisto.writer.json';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+const liveOwnerTokens = new Set();
 
 function unavailable(cause) {
     return Object.assign(new Error('Durable storage is unavailable; restart after repairing storage.', { cause }), {
@@ -16,26 +17,135 @@ function unavailable(cause) {
     });
 }
 
+function locked() {
+    return Object.assign(new Error('Persisto already has a live or ambiguous writer lock.'), {
+        code: 'persistence_locked', statusCode: 503,
+    });
+}
+
+function runtimeIdentity(env = process.env) {
+    const instanceId = String(env.PLOINKY_AGENT_INSTANCE_ID || '').trim();
+    const enableGeneration = String(env.PLOINKY_AGENT_ENABLE_GENERATION || '').trim();
+    return instanceId && enableGeneration ? { instanceId, enableGeneration } : null;
+}
+
+function writerOwner() {
+    return {
+        version: 2,
+        pid: process.pid,
+        hostname: hostname(),
+        token: randomUUID(),
+        ...runtimeIdentity(),
+    };
+}
+
+function parseOwner(bytes) {
+    const owner = JSON.parse(bytes.toString('utf8'));
+    const hasInstance = typeof owner?.instanceId === 'string' && owner.instanceId.trim().length > 0;
+    const hasGeneration = typeof owner?.enableGeneration === 'string' && owner.enableGeneration.trim().length > 0;
+    if (!owner || (owner.version !== undefined && owner.version !== 2)
+        || !Number.isSafeInteger(owner.pid) || owner.pid <= 0
+        || typeof owner.hostname !== 'string' || !owner.hostname.trim()
+        || typeof owner.token !== 'string' || !owner.token.trim()
+        || (hasInstance && owner.instanceId !== owner.instanceId.trim())
+        || (hasGeneration && owner.enableGeneration !== owner.enableGeneration.trim())
+        || hasInstance !== hasGeneration) {
+        throw locked();
+    }
+    return owner;
+}
+
+async function captureOwner(lockPath) {
+    const stat = await lstat(lockPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw locked();
+    const bytes = await readFile(lockPath);
+    return { owner: parseOwner(bytes), stat, bytes };
+}
+
+function processIsProvenDead(pid) {
+    try {
+        process.kill(pid, 0);
+        return false;
+    } catch (error) {
+        return error?.code === 'ESRCH';
+    }
+}
+
+function isProvenPredecessor(existing, current) {
+    if (existing.hostname === current.hostname) {
+        if (liveOwnerTokens.has(existing.token)) return false;
+        if (existing.pid === current.pid) return true;
+        return processIsProvenDead(existing.pid);
+    }
+    const currentIdentity = current.instanceId && current.enableGeneration
+        ? { instanceId: current.instanceId, enableGeneration: current.enableGeneration }
+        : null;
+    if (!currentIdentity) return false;
+    const existingIdentity = existing.instanceId && existing.enableGeneration
+        ? { instanceId: existing.instanceId, enableGeneration: existing.enableGeneration }
+        : null;
+    return !existingIdentity
+        || existingIdentity.instanceId !== currentIdentity.instanceId
+        || existingIdentity.enableGeneration !== currentIdentity.enableGeneration;
+}
+
+async function recoverPredecessorLock(lockPath, current) {
+    let captured;
+    try {
+        captured = await captureOwner(lockPath);
+    } catch (error) {
+        if (error.code === 'ENOENT') return true;
+        throw error.code === 'persistence_locked' ? error : locked();
+    }
+    if (!isProvenPredecessor(captured.owner, current)) throw locked();
+    let latest;
+    try {
+        latest = await captureOwner(lockPath);
+    } catch (error) {
+        if (error.code === 'ENOENT') return true;
+        throw error.code === 'persistence_locked' ? error : locked();
+    }
+    if (latest.stat.dev !== captured.stat.dev || latest.stat.ino !== captured.stat.ino
+        || latest.stat.size !== captured.stat.size || !latest.bytes.equals(captured.bytes)) {
+        throw locked();
+    }
+    try {
+        await unlink(lockPath);
+        return true;
+    } catch (error) {
+        if (error.code === 'ENOENT') return true;
+        throw locked();
+    }
+}
+
 // Persisto remains the model/index engine. Its filesystem primitives are backed by
 // one atomic snapshot so a save cannot publish only part of an object/index set.
 // The upstream AutoSaver deliberately swallows errors, so it is not used here.
 export async function createDurableStorage(folder) {
     const lockPath = join(folder, LOCK_FILE);
-    const owner = JSON.stringify({ pid: process.pid, hostname: hostname(), token: randomUUID() });
+    const currentOwner = writerOwner();
+    const owner = JSON.stringify(currentOwner);
+    liveOwnerTokens.add(currentOwner.token);
     let lock;
     try {
-        lock = await open(lockPath, 'wx', 0o600);
-    } catch (cause) {
-        if (cause.code === 'EEXIST') {
-            throw Object.assign(new Error('Persisto already has a writer lock. Stop all writers before recovering a stale lock.'), {
-                code: 'persistence_locked', statusCode: 503,
-            });
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+                lock = await open(lockPath, 'wx', 0o600);
+                break;
+            } catch (cause) {
+                if (cause.code !== 'EEXIST' || attempt > 0) throw cause;
+                await recoverPredecessorLock(lockPath, currentOwner);
+            }
         }
+    } catch (cause) {
+        liveOwnerTokens.delete(currentOwner.token);
+        if (cause.code === 'EEXIST' || cause.code === 'persistence_locked') throw locked();
         throw unavailable(cause);
     }
     const release = () => {
         // Never remove another writer's lock, including after a directory swap.
         try { if (readFileSync(lockPath, 'utf8') === owner) unlinkSync(lockPath); } catch { /* Already removed/unavailable. */ }
+        liveOwnerTokens.delete(currentOwner.token);
         process.removeListener('exit', release);
     };
     try {
