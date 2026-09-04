@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {EventEmitter} from 'node:events';
 import vm from 'node:vm';
 import {smokeConfig} from './config.mjs';
 import {callAgentToolViaRouter} from './mcp.mjs';
 import {withWebchatUploadProject} from './webchat.mjs';
+import {attachPageDiagnostics} from './fixtures.mjs';
 
 const EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
 const EMPTY_DIRECTORY_RESPONSE = {content: [{type: 'text', text: EMPTY_TEXT_SENTINEL}]};
@@ -51,7 +53,7 @@ function fixture({contents = EMPTY_DIRECTORY_RESPONSE, navigationStatus = 200} =
         }
         return {ok: true, status: 200, json: async () => ({result})};
     }
-    const page = {
+    const page = Object.assign(new EventEmitter(), {
         url: () => currentUrl,
         async evaluate(callback, args) {
             // Execute the real browser-side MCP proof, transport and decoder code.
@@ -67,7 +69,8 @@ function fixture({contents = EMPTY_DIRECTORY_RESPONSE, navigationStatus = 200} =
             currentUrl = new URL(target, smokeConfig.baseURL).toString();
             return {status: () => navigationStatus};
         },
-    };
+    });
+    attachPageDiagnostics(page, {}, 'upload-project-unit');
     const dependencies = {
         async signInFn(target, account, returnTo) {
             events.push('authenticate');

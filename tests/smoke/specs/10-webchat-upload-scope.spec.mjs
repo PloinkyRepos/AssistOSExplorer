@@ -3,6 +3,7 @@ import { smokeConfig } from '../lib/config.mjs';
 import {
   expectWebchatSuggestion,
   openTaggedWebchat,
+  selectWebchatWorkspacePath,
   setComposer,
   uploadFolder,
   uploadOneFile,
@@ -54,11 +55,7 @@ test.describe('WebChat direct workspace uploads', () => {
       expect(upload.payload.relativePath).toBe(upload.relativePath);
       expect(upload.payload.workspacePath).toBe(`${directory}/${upload.relativePath}`);
 
-      await setComposer(page, `@${upload.folderName}`);
-      await expectWebchatSuggestion(page, {
-        group: 'Files and folders',
-        text: upload.relativePath,
-      });
+      await selectWebchatWorkspacePath(page, upload.relativePath);
     });
   });
 });

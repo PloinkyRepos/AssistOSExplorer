@@ -31,6 +31,27 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+async function observeExplorerPluginReadiness(page) {
+  await page.addInitScript(() => {
+    window.__e2eWebttyExplorerPluginsReady = false;
+    window.addEventListener('assistos:runtime-plugins-updated', (event) => {
+      if (event.detail?.phase === 'ready') window.__e2eWebttyExplorerPluginsReady = true;
+    });
+  });
+}
+
+async function waitForExplorerPluginRender(page, timeout = smokeConfig.timeouts.navigation) {
+  // Shell readiness intentionally precedes plugin discovery. The ready event
+  // starts mounting; its presenter promise covers component HTML/CSS/modules
+  // and stays non-null until the current (possibly queued) render settles.
+  await page.waitForFunction(() => {
+    if (!window.__e2eWebttyExplorerPluginsReady) return false;
+    const presenter = document.querySelector('file-exp')?.webSkelPresenter;
+    if (!presenter) return false;
+    return !presenter.__appPluginRenderPromise;
+  }, null, { timeout });
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -559,6 +580,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
     let userContext = null;
     let foreignAdminContext = null;
     try {
+      await observeExplorerPluginReadiness(page);
       await openExplorer(page, { hash: fixture.explorerHash });
       await assertExplorerDirectory(page, fixture.parentDirectoryPath);
       const admin = await readAuthenticatedPrincipal(page, smokeConfig.primaryUser);
@@ -1271,6 +1293,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
       expect(restartSleepInput).toMatchObject({ status: 200, payload: { ok: true } });
       const restartSleepPattern = new RegExp(`(?:^|\\s)sleep ${restartSleepSeconds}(?:$|\\s)`);
       await waitForAgentProcess(replacementRuntime, replacementGitAgent, restartSleepPattern, true);
+      await waitForExplorerPluginRender(page);
       assertPageDiagnosticsClean(page, 'Explorer must be error-free before Router fault injection');
       // Only the recovery terminal is the outage target. Stop unrelated Explorer
       // background traffic without muting either page's diagnostic ledger.

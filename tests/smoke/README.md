@@ -279,7 +279,9 @@ Explorer background traffic. The gate first requires clean primary-page
 diagnostics, navigates that Explorer page to `about:blank`, and keeps the
 terminal's exact prior-epoch transport-error oracle active. Only after a new
 Router identity and healthy authenticated endpoint are verified does it reopen
-Explorer and require clean diagnostics again. Evidence records the quiesce,
+Explorer and require clean diagnostics again. Before navigation, WebTTY quiescence
+waits for Explorer's deferred runtime-plugin render chain; both pre-navigation and
+post-navigation diagnostic checks remain strict. Evidence records the quiesce,
 Router recovery, and Explorer reopen timestamps; no global error filter is used.
 
 The listener gate always requires `required-loopback`, requires exactly one
@@ -310,13 +312,25 @@ block and a successful result before decoding, so error flags or extra blocks
 cannot be discarded into a false empty-directory result. The test deletes that
 exact fixture through the same MCP during cleanup. Setup authenticates
 into an inert same-origin WebChat CSS document, without starting a root chat or
-displaying credential responses. Cleanup navigates back to that document and
-requires its successful response and exact origin/path before deleting the
-project, so no active WebChat page watches a removed working directory. Browser
-diagnostics remain enabled throughout. Ordinary source
+displaying credential responses. Cancellation waits for the exact control request's
+successful, completed HTTP 204 response rather than optimistic idle UI. Cleanup
+requires clean diagnostics and identifies the sole active, successful EventSource
+for that project before navigating back to the inert document. It requires that
+stream to terminate and the document's successful response and exact origin/path
+before deleting the project. Only the captured stream's intentional navigation
+abort may be acknowledged through the exact diagnostic ledger; other, duplicate,
+prior, and later failures remain fatal, and evidence is retained. No active WebChat
+page watches a removed working directory. Folder suggestions are tested by selecting
+the uploaded folder, then its nested folder, then the exact uploaded relative path:
+`@` lists the active folder, not all descendants recursively. Browser diagnostics
+remain enabled throughout. Ordinary source
 checkouts at the workspace root must not determine the upload fixture's quota
 usage. The production file-count/byte quotas and reserved-path exclusions remain
 unchanged.
+
+`npm run test:unit` includes isolated Chromium regressions for these cleanup and
+diagnostic boundaries, so run `npm run install:browsers` before that suite. Missing
+Chromium is a test failure, not a silently skipped lifecycle check.
 
 The Marketplace lifecycle test controls both the Marketplace snapshot and the
 runtime NDJSON stream with one synthetic lifecycle. It verifies Starting up,

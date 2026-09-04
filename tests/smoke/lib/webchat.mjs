@@ -6,8 +6,8 @@ import { expect } from './fixtures.mjs';
 import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
 import { callAgentToolViaRouter } from './mcp.mjs';
+import { observeWebchatCleanup, WEBCHAT_FIXTURE_DOCUMENT } from './webchat-cleanup.mjs';
 
-const WEBCHAT_FIXTURE_DOCUMENT = '/webchat/assets/webchat.css';
 // explorer/tools/explorer_tool.mjs preserves empty text across its stdout wire.
 const EXPLORER_EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
 
@@ -45,6 +45,7 @@ export async function withWebchatUploadProject(page, run, {
     agent: 'explorer', tool: 'create_directory', args: {path: directory},
   });
   expect(created.rawText).toMatch(/^Successfully created directory /);
+  const cleanup = observeWebchatCleanup(page, directory);
   try {
     const contents = await callTool(page, {
       agent: 'explorer', tool: 'list_directory', args: {path: directory},
@@ -55,14 +56,15 @@ export async function withWebchatUploadProject(page, run, {
     });
     await run(directory);
   } finally {
-    const response = await page.goto(WEBCHAT_FIXTURE_DOCUMENT, {waitUntil: 'load'});
-    expect(response?.status(), 'the inert cleanup document must load successfully').toBe(200);
-    expect(new URL(page.url()).origin).toBe(new URL(smokeConfig.baseURL).origin);
-    expect(new URL(page.url()).pathname).toBe(WEBCHAT_FIXTURE_DOCUMENT);
-    const removed = await callTool(page, {
-      agent: 'explorer', tool: 'delete_directory', args: {path: directory},
-    });
-    expect(removed.rawText).toMatch(/^Successfully deleted directory /);
+    try {
+      await cleanup.quiesce();
+      const removed = await callTool(page, {
+        agent: 'explorer', tool: 'delete_directory', args: {path: directory},
+      });
+      expect(removed.rawText).toMatch(/^Successfully deleted directory /);
+    } finally {
+      cleanup.dispose();
+    }
   }
 }
 
@@ -72,12 +74,35 @@ export async function waitForWebchatIdle(page, timeout = smokeConfig.timeouts.na
   await expect(page.locator('#send')).toBeVisible();
 }
 
-export async function cancelWebchatGenerationIfActive(page) {
+export async function cancelWebchatGenerationIfActive(page, {timeout = smokeConfig.timeouts.navigation} = {}) {
   await page.waitForTimeout(1_000);
   const cancelButton = page.locator('#cancelBtn');
   const active = await cancelButton.isVisible({ timeout: 2_000 }).catch(() => false);
   if (!active) return;
-  await cancelButton.click();
+  const current = new URL(page.url());
+  const [response] = await Promise.all([
+    page.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return url.origin === current.origin && url.pathname === '/webchat/control'
+        && candidate.request().method() === 'POST' && candidate.request().postData() === '\x1b'
+        && url.searchParams.get('agent') === current.searchParams.get('agent')
+        && url.searchParams.get('workspace-dir') === current.searchParams.get('workspace-dir');
+    }, {timeout}),
+    cancelButton.click(),
+  ]);
+  expect(response.status(), 'WebChat cancellation must be accepted before cleanup').toBe(204);
+  let timer;
+  try {
+    const completed = await Promise.race([
+      response.finished(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('WebChat cancellation response did not finish before cleanup.')), timeout);
+      }),
+    ]);
+    expect(completed, 'WebChat cancellation response must finish before cleanup').toBeNull();
+  } finally {
+    clearTimeout(timer);
+  }
   await waitForWebchatIdle(page);
 }
 
@@ -139,6 +164,24 @@ export async function expectNoWebchatSuggestion(page, text) {
 
 export async function selectActiveWebchatSuggestion(page) {
   await page.keyboard.press('Enter');
+}
+
+export async function selectWebchatWorkspacePath(page, relativePath) {
+  const segments = relativePath.split('/');
+  await setComposer(page, `@${segments[0]}`);
+  for (let index = 0; index < segments.length; index += 1) {
+    const prefix = segments.slice(0, index + 1).join('/');
+    const folder = index < segments.length - 1;
+    await expectWebchatSuggestion(page, {
+      group: 'Files and folders', text: `${prefix}${folder ? '/' : ''}`,
+    });
+    const label = `${prefix}${folder ? '/' : ''}`;
+    const exactLabel = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+    await page.locator('.wa-slash-menu-item').filter({
+      has: page.locator('.wa-slash-menu-label', {hasText: exactLabel}),
+    }).click();
+    await expect(page.locator('#cmd')).toHaveValue(`@${prefix}${folder ? '/' : ' '}`);
+  }
 }
 
 async function confirmDefaultUploadDestination(page) {
