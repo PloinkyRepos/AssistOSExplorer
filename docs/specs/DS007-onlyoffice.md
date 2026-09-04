@@ -17,6 +17,8 @@ The onlyOffice agent must own session construction, signed editor transport, cal
 
 Secrets and other non-file DPU resources must remain outside the OnlyOffice flow.
 
+The editor transport admits only dictionary `.dic` and `.aff` files beneath validated language directories, in addition to its existing asset allowlist. Signed editor configuration disables third-party plugins, and the managed DocumentServer process disables its background plugin updater; the Office integration has no external AI-plugin feature. Explorer loads the native editor's immutable versioned status-icon asset while its route is active so the disconnect dialog remains complete during a targeted restart. Concurrent renders await the same preload; failed or superseded preloads cannot mark an editor ready or damage a newer session.
+
 ## Conclusion
 
 OnlyOffice integration provides Office editing without moving session security or protected storage behavior into Explorer.

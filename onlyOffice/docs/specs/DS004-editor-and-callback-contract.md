@@ -17,6 +17,8 @@ Session state must not contain delegation bearers. After recreation, a fresh aut
 
 Confidential paths must use the Router-minted [dpuConfidential delegation](wiki.html#definition-confidential-delegation) with the declared DPU tools and scopes. Workspace paths must use the configured workspace storage policy. [DocumentServer auto-assembly](wiki.html#definition-auto-assembly) remains controlled by the manifest environment variables and does not bypass session or storage validation.
 
+Public editor assets include only validated `/dictionaries/<language>/<name>.dic` and `.aff` requests for spellcheck; mutation methods, directory listings, other extensions, and traversal remain denied. Signed `editorConfig.customization.plugins` is false because this integration does not provide third-party editor plugins or their independent inference providers.
+
 ## Conclusion
 
 Short-lived body-bound JWTs, exact forwarding validation, and delegated storage keep the editor transport from becoming a general credential or filesystem proxy.

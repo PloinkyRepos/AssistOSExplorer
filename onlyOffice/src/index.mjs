@@ -388,7 +388,7 @@ export function startDocumentServerProcess({
 
   const child = spawnProcess('/bin/bash', ['-lc', command], {
     detached: true,
-    env,
+    env: { ...env, PLUGINS_ENABLED: 'false' },
     stdio: 'inherit',
   });
 

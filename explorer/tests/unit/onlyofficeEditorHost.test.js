@@ -277,3 +277,32 @@ test('an error from a superseded editor generation cannot invalidate the newer e
         }
     }
 });
+
+test('disconnect status asset is loaded from the mounted native version before completion', async () => {
+    const { preloadOnlyOfficeStatusAsset } = await import('../../services/onlyoffice/onlyoffice-editor-host.js');
+    const base = 'http://localhost:8080/base-agent-additional-server/onlyOffice/8080';
+    const image = {};
+    const host = { querySelector: () => ({ src: `${base}/9.3.1-build/web-apps/apps/documenteditor/main/index.html?token=unused` }) };
+    let completed = false;
+    const pending = preloadOnlyOfficeStatusAsset(host, base, { createImage: () => image }).then(() => { completed = true; });
+    await Promise.resolve();
+    assert.equal(completed, false);
+    assert.equal(image.src, `${base}/9.3.1-build/web-apps/apps/common/main/resources/img/controls/warnings_s.svg`);
+    image.onload();
+    await pending;
+    assert.equal(completed, true);
+});
+
+test('status preload rejects cross-route frames and propagates missing assets', async () => {
+    const { preloadOnlyOfficeStatusAsset } = await import('../../services/onlyoffice/onlyoffice-editor-host.js');
+    const base = 'http://localhost:8080/base-agent-additional-server/onlyOffice/8080';
+    for (const src of ['https://outside.example/web-apps/apps/documenteditor/main/index.html', 'http://localhost:8080/other/web-apps/apps/documenteditor/main/index.html']) {
+        await assert.rejects(() => preloadOnlyOfficeStatusAsset({ querySelector: () => ({ src }) }, base, {
+            createImage: () => assert.fail('must not request outside editor route'),
+        }), /outside its configured route/);
+    }
+    const image = {};
+    const pending = preloadOnlyOfficeStatusAsset({ querySelector: () => ({ src: `${base}/web-apps/apps/documenteditor/main/index.html` }) }, base, { createImage: () => image });
+    image.onerror();
+    await assert.rejects(() => pending, /could not load/);
+});

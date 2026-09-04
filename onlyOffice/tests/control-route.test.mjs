@@ -238,6 +238,7 @@ test('office session route builds signed config with loopback document and callb
   assert.deepEqual(payload.config.editorConfig.customization, {
     autosave: true,
     forcesave: true,
+    plugins: false,
   });
   assert.equal(countNamedFields(payload.config, 'token'), 1);
   assert.equal(typeof payload.config.token, 'string');
@@ -311,6 +312,7 @@ test('office session route resolves storage metadata before signing config', asy
 	  assert.deepEqual(payload.config.editorConfig.customization, {
 	    autosave: true,
 	    forcesave: false,
+	    plugins: false,
 	  });
 
 	  const signedPayload = verifySignedConfigToken(payload.config.token, 'onlyoffice-jwt-secret');

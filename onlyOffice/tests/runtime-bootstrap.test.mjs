@@ -60,6 +60,7 @@ test('DocumentServer owns a process group that is signalled as one during shutdo
   assert.equal(calls[0].file, '/bin/bash');
   assert.deepEqual(calls[0].args, ['-lc', 'document-server-command']);
   assert.equal(calls[0].options.detached, true);
+  assert.equal(calls[0].options.env.PLUGINS_ENABLED, 'false');
   assert.deepEqual(calls[1], { pid: -4242, signal: 'SIGTERM' });
 });
 

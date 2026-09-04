@@ -23,6 +23,8 @@ The wrapper and its foreground helpers must run in a dedicated process group so 
 
 Each session must resolve the current immutable [topology generation](wiki.html#definition-topology-generation) and store an atomic guarded 0600 state file under the persistent work directory. Bundled service data remains image-owned; only exact guarded service paths may receive ownership or mode preparation.
 
+DocumentServer startup fixes `PLUGINS_ENABLED=false` to prevent the upstream background plugin updater from changing the pinned asset bundle. Before an editor becomes ready in Explorer, its versioned immutable status SVG is loaded while the owner route is active. The browser may then render native disconnect warnings from cache after route retirement without opening inactive routes.
+
 ## Conclusion
 
 The runtime contract makes service activation and session generation explicit and fails closed when the expected pinned topology is not present.
