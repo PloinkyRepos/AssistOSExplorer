@@ -4,7 +4,6 @@ import {
   assertDistinctAuthenticatedPrincipals,
   normalizePrincipalComponent,
   signIn,
-  trySignIn,
 } from '../lib/auth.mjs';
 import { stopAndAttachRedactedTrace } from '../lib/redacted-trace.mjs';
 import { createReleaseGateFailureCollector } from '../lib/release-gate-failures.mjs';
@@ -23,6 +22,7 @@ import {
   expectAuthenticatedStandaloneWebMeet,
   expectBidirectionalAudioVideoRtp,
   expectWebMeetMediaState,
+  expectWebMeetReady,
   expectIncreasingRtpStats,
   expectJoinMaterialRefreshLifecycle,
   expectTwoDistinctWebMeetParticipants,
@@ -31,6 +31,7 @@ import {
   joinRoom,
   openWebMeet,
   sendWebMeetChat,
+  trySignInToWebMeet,
 } from '../lib/webmeet.mjs';
 
 function expectNoUnfilteredBrowserErrors(diagnostics, label) {
@@ -282,7 +283,7 @@ test.describe('WebMeet rooms', () => {
         await installRtcProbe(memberContext);
         memberPage = await memberContext.newPage();
         memberDiagnostics = attachPageDiagnostics(memberPage, testInfo, 'webmeet-secondary');
-        const secondaryLoginOk = await trySignIn(memberPage, smokeConfig.secondaryUser, explorerUrl());
+        const secondaryLoginOk = await trySignInToWebMeet(memberPage, smokeConfig.secondaryUser);
         if (smokeConfig.flags.webmeetRefresh) {
           expect(
             secondaryLoginOk,
@@ -291,9 +292,10 @@ test.describe('WebMeet rooms', () => {
         } else {
           test.skip(!secondaryLoginOk, `Secondary smoke account ${smokeConfig.secondaryUser.username} cannot log in.`);
         }
+        await expectWebMeetReady(memberPage, { expectCreateRoom: false });
+      } else {
+        await openWebMeet(memberPage, smokeConfig.secondaryUser, { expectCreateRoom: false });
       }
-
-      await openWebMeet(memberPage, smokeConfig.secondaryUser, { expectCreateRoom: false });
       await joinRoom(memberPage, roomTitle);
       identities = await expectTwoDistinctWebMeetParticipants(ownerPage, memberPage);
       if (smokeConfig.flags.webmeetScreen || smokeConfig.flags.webmeetHeadless) {
