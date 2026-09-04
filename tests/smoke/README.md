@@ -295,6 +295,21 @@ The Box generation must be fresh, but its prebuilt image may be older only when
 the gate binds the exact container name, immutable image ID/reference, and
 read-only mounted Ploinky candidate derived from `SMOKE_PLOINKY_BIN`.
 
+The intentional Router crash targets the recovery terminal, not unrelated
+Explorer background traffic. The gate first requires clean primary-page
+diagnostics, navigates that Explorer page to `about:blank`, and keeps the
+terminal's exact prior-epoch transport-error oracle active. Only after a new
+Router identity and healthy authenticated endpoint are verified does it reopen
+Explorer and require clean diagnostics again. Before navigation, WebTTY quiescence
+waits for Explorer's deferred runtime-plugin render chain and its outstanding
+finite requests through body completion, including authorization and icon loads
+outside that render chain. Observation begins before the first navigation;
+only successful responses with an exact `text/event-stream` media type are
+excluded from the bounded wait. Failed requests remain diagnostic failures,
+and both pre-navigation and post-navigation checks remain strict. This wait is
+not evidence of a fix for terminal startup or cleanup failures. Evidence records the quiesce,
+Router recovery, and Explorer reopen timestamps; no global error filter is used.
+
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no
 listener for an `inactive-unassigned-managed-gateway`. The inactive state
@@ -308,11 +323,46 @@ Default smoke checks:
 
 - Router auth, root landing, Explorer shell, and WebChat shell.
 - WebChat file and folder uploads through the browser.
-- WebChat upload containment evidence from the upload response: `uploads/<sessionId>/...`.
-- Session-scoped WebChat `@` file suggestions by comparing two browser contexts.
+- WebChat direct-workspace upload containment: exact `relativePath`, selected-project `workspacePath`, and encoded `/workspace-files/` download URL.
+- WebChat `@` file suggestions shared by sibling sessions opened at the same selected project directory.
 - WebChat provider-looking `@open-interpreter` text is not offered as a dispatch suggestion.
 - WebMeet room creation, two-account join, chat delivery, and cleanup.
 - WebMeet provider-looking `@open-interpreter` text stays ordinary meeting chat.
+
+Each upload test creates a unique empty project directory through Explorer's
+authenticated filesystem MCP, selects it in both relevant WebChat contexts, and
+requires the exact `__ASSISTOS_EXPLORER_EMPTY_TEXT__` transport sentinel from its
+initial directory listing. An arbitrary empty/missing/error response is not
+accepted as proof that the fixture is empty: the MCP helper validates a sole text
+block and a successful result before decoding, so error flags or extra blocks
+cannot be discarded into a false empty-directory result. The test deletes that
+exact fixture through the same MCP during cleanup. Setup authenticates
+into an inert same-origin WebChat CSS document, without starting a root chat or
+displaying credential responses. Cancellation waits for the exact control request's
+successful, completed HTTP 204 response rather than optimistic idle UI. Cleanup
+requires clean diagnostics and identifies the sole active, successful EventSource
+for that project before navigating back to the inert document. It requires that
+stream to terminate and the document's successful response and exact origin/path
+before deleting the project. Only the captured stream's intentional navigation
+abort may be acknowledged through the exact diagnostic ledger; other, duplicate,
+prior, and later failures remain fatal, and evidence is retained. No active WebChat
+page watches a removed working directory. Folder suggestions are tested by selecting
+the uploaded folder, then its nested folder, then the exact uploaded relative path:
+`@` lists the active folder, not all descendants recursively. Browser diagnostics
+remain enabled throughout. Ordinary source
+checkouts at the workspace root must not determine the upload fixture's quota
+usage. The production file-count/byte quotas and reserved-path exclusions remain
+unchanged.
+
+`npm run test:unit` includes isolated Chromium regressions for these cleanup and
+diagnostic boundaries, so run `npm run install:browsers` before that suite. Missing
+Chromium is a test failure, not a silently skipped lifecycle check.
+
+The Marketplace lifecycle test controls both the Marketplace snapshot and the
+runtime NDJSON stream with one synthetic lifecycle. It verifies Starting up,
+Running, Stopped, and Disabled, including labels, accessibility, Configure and
+runtime-mode readiness. This is UI lifecycle evidence, not proof that the mocked
+agent was actually started or stopped.
 
 Opt-in checks:
 
@@ -367,7 +417,17 @@ Run the same gate against a fresh Ploinky Box deployment with:
 SMOKE_DEPLOYMENT_MODE=box SMOKE_BASE_URL=http://127.0.0.1:8080 SMOKE_WEBMEET_MEDIA=1 SMOKE_WEBMEET_SCREEN=1 SMOKE_TEST_TIMEOUT_MS=240000 npm test -- --headed --project=chromium specs/30-webmeet-room-chat.spec.mjs
 ```
 
-In Box mode, exactly one outer container must publish
+Shared local Box discovery, including the headless acceptance gates, supports
+isolated deployments such as Router TCP `28080` and media UDP `27882` alongside
+another Box. Exactly one running Box must match the selected loopback Router
+port; its only other publication must be
+`0.0.0.0:<media-host-port label>:7882/udp`. Both host ports must match the
+immutable Box labels, and missing, malformed, mismatched, or additional
+publications fail. This does not change the fixed UDP `7882` scanner and ICE
+requirements of the screen-share and external-network gates below; those gates
+reject an alternate media host port.
+
+For the screen-share gate in Box mode, exactly one outer container must publish
 `127.0.0.1:<SMOKE_BASE_URL port>:8080/tcp` and
 `0.0.0.0:7882:7882/udp`, carry the exact semantic Box ownership labels, and use a freshly built
 image. Those labels include the exact AgentLib selection identity; missing,

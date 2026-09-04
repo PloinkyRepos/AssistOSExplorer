@@ -210,17 +210,23 @@ test('Marketplace enables Configure only while its agent is running', async () =
     assert.equal(settingsButton['aria-disabled'], 'false');
 });
 
-test('Marketplace patches only the changed agent row when a runtime status event arrives', async () => {
+test('Marketplace stream transitions preserve normalized presentation and real Configure gating without rebuilding rows', async (t) => {
     const {MarketplaceModal} = await loadMarketplaceModal();
     const modal = new MarketplaceModal({}, () => {});
     modal.state = {
         busy: false,
         marketplace: {
-            agents: [{ref: 'AchillesIDE/webAssist', active: true, status: 'created', running: false}]
+            permissions: {canManage: true},
+            agents: [{ref: 'AchillesIDE/webAssist', active: true, status: 'starting', running: false,
+                statusDetail: 'Background startup is in progress.'}]
         }
     };
-    const status = {className: 'marketplace-agent-status created', textContent: 'created'};
-    const settingsButton = {dataset: {agentSettingsKey: 'webassist-settings', agentRunning: 'false'}};
+    const attributes = () => ({
+        setAttribute(name, value) { this[name] = value; },
+        removeAttribute(name) { delete this[name]; }
+    });
+    const status = {...attributes()};
+    const settingsButton = {...attributes(), dataset: {agentSettingsKey: 'webassist-settings'}};
     const toggle = {
         dataset: {agentRef: 'AchillesIDE/webAssist', active: 'true'},
         classList: {
@@ -230,6 +236,11 @@ test('Marketplace patches only the changed agent row when a runtime status event
             }
         },
         textContent: 'Disable'
+    };
+    const mode = {
+        dataset: {enableModeFor: 'AchillesIDE/webAssist'},
+        closest: () => ({querySelector: () => toggle}),
+        toggleAttribute(_name, disabled) { this.disabled = disabled; }
     };
     const row = {
         dataset: {marketplaceAgentRef: 'AchillesIDE/webAssist'},
@@ -242,32 +253,86 @@ test('Marketplace patches only the changed agent row when a runtime status event
     };
     modal.agentsEl = {
         querySelectorAll(selector) {
-            return selector === '[data-marketplace-agent-ref]' ? [row] : [];
+            return {
+                '[data-marketplace-agent-ref]': [row],
+                '[data-agent-settings-key]': [settingsButton],
+                '[data-agent-ref]': [toggle],
+                '[data-enable-mode-for]': [mode]
+            }[selector] || [];
         }
     };
-    let interactiveSyncs = 0;
     modal.renderAgents = () => assert.fail('runtime status updates must not rebuild agent rows');
-    modal.syncInteractiveState = () => { interactiveSyncs += 1; };
+    t.after(() => clearTimeout(modal.agentStatusRefreshTimer));
+    modal.updateAgentRuntimeUi(modal.state.marketplace.agents[0]);
+    modal.syncInteractiveState();
+    assert.equal(status.textContent, 'Starting up');
+    assert.equal(status.title, 'Background startup is in progress.');
+    assert.equal(status['aria-label'], 'webAssist status: Starting up');
+    assert.equal(settingsButton.disabled, true);
+    assert.equal(settingsButton['aria-disabled'], 'true');
+    assert.equal(settingsButton.title, 'Configure is available once webAssist is running.');
+    assert.equal(mode.disabled, true);
 
-    modal.handleRuntimeStatusUpdated({
+    const sendState = (enabled, runtimeState) => modal.handleRuntimeStatusUpdated({
         detail: {
             runtimes: [{
                 repoName: 'AchillesIDE',
                 agentName: 'webAssist',
-                enabled: true,
-                state: {status: 'running', running: true}
+                enabled,
+                state: runtimeState
             }]
         }
     });
-
+    sendState(true, {status: 'running', running: true});
     assert.equal(modal.state.marketplace.agents[0].status, 'running');
-    assert.equal(status.textContent, 'running');
+    assert.equal(status.textContent, 'Running');
     assert.equal(status.className, 'marketplace-agent-status running');
-    assert.equal(settingsButton.dataset.agentRunning, 'true');
+    assert.equal(status['aria-label'], 'webAssist status: Running');
+    assert.equal(status.title, undefined);
+    assert.equal(settingsButton.dataset.agentOperational, 'true');
+    assert.equal(settingsButton.disabled, false);
+    assert.equal(settingsButton['aria-disabled'], 'false');
+    assert.equal(settingsButton.title, undefined);
     assert.equal(toggle.dataset.active, 'true');
     assert.equal(toggle.classList.active, true);
     assert.equal(toggle.textContent, 'Disable');
-    assert.equal(interactiveSyncs, 1);
+
+    sendState(true, {status: 'stopped', running: false});
+    assert.equal(status.textContent, 'Stopped');
+    assert.equal(settingsButton.dataset.agentOperational, 'false');
+    assert.equal(settingsButton.disabled, true);
+    assert.equal(settingsButton['aria-disabled'], 'true');
+    assert.equal(mode.disabled, true);
+
+    sendState(true, {status: 'starting', running: false});
+    assert.equal(status.textContent, 'Starting up');
+    assert.ok(modal.agentStatusRefreshTimer, 'streamed startup schedules snapshot refresh');
+    sendState(true, {status: 'running', running: true});
+    assert.equal(modal.agentStatusRefreshTimer, null);
+    assert.equal(settingsButton.disabled, false);
+    modal.state.agentMutationBusyRef = 'AchillesIDE/webAssist';
+    modal.state.agentMutationVerb = 'Disabling';
+    sendState(false, {status: 'inactive', running: true});
+    assert.equal(status.textContent, 'Disabled');
+    assert.equal(status.className, 'marketplace-agent-status disabled');
+    assert.equal(status['aria-label'], 'webAssist status: Disabled');
+    assert.equal(settingsButton.disabled, true, 'disabled agent cannot configure even with contradictory running evidence');
+    assert.equal(settingsButton.dataset.agentOperational, 'false');
+    assert.equal(toggle.textContent, 'Disabling...');
+    assert.equal(toggle.disabled, true);
+    modal.state.agentMutationBusyRef = '';
+    sendState(false, {status: 'inactive', running: false});
+    assert.equal(toggle.textContent, 'Enable');
+    assert.equal(mode.disabled, false);
+    assert.equal(toggle.disabled, false);
+
+    sendState(true, {status: 'untrusted arbitrary-class', running: false});
+    assert.equal(status.textContent, 'Unknown');
+    assert.equal(status.className, 'marketplace-agent-status unknown');
+    assert.equal(settingsButton.disabled, true);
+    modal.handleRuntimeStatusUpdated({detail: {runtimes: []}});
+    assert.equal(status.textContent, 'Disabled', 'missing runtime evidence must close Configure');
+    assert.equal(settingsButton.disabled, true);
 });
 
 test('Marketplace does not reconnect the runtime status stream after a permanent HTTP error', async (t) => {

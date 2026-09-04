@@ -1,11 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 import { expect } from './fixtures.mjs';
 import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
+import { callAgentToolViaRouter } from './mcp.mjs';
+import { observeWebchatCleanup, WEBCHAT_FIXTURE_DOCUMENT } from './webchat-cleanup.mjs';
 
-export function taggedWebchatPath() {
+// explorer/tools/explorer_tool.mjs preserves empty text across its stdout wire.
+const EXPLORER_EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
+
+export function taggedWebchatPath(workspaceDirectory = '.') {
   const params = new URLSearchParams({
     agent: smokeConfig.webchatAgent,
     'research-tags': '1',
@@ -14,16 +20,52 @@ export function taggedWebchatPath() {
     'tag-relay-submit-tool': 'research_task_submit',
     'tag-relay-list-tool': 'research_relay_list_backends',
     'tag-relay-tags': 'open-interpreter',
-    'workspace-dir': '.',
+    'workspace-dir': workspaceDirectory,
   });
   return `/webchat?${params.toString()}`;
 }
 
-export async function openTaggedWebchat(page, account = smokeConfig.primaryUser) {
-  await signIn(page, account, taggedWebchatPath());
+export async function openTaggedWebchat(page, account = smokeConfig.primaryUser, workspaceDirectory = '.') {
+  await signIn(page, account, taggedWebchatPath(workspaceDirectory));
   await expect(page.locator('#cmd')).toBeVisible();
   await cancelWebchatGenerationIfActive(page);
   await waitForWebchatIdle(page);
+}
+
+export async function withWebchatUploadProject(page, run, {
+  signInFn = signIn,
+  callTool = callAgentToolViaRouter,
+} = {}) {
+  const runId = smokeConfig.runId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const directory = `webchat-upload-${runId}-${crypto.randomUUID()}`;
+  // Use an inert same-origin document for authenticated fixture MCP calls.
+  // No chat starts at the workspace root and no credential response is rendered.
+  await signInFn(page, smokeConfig.primaryUser, WEBCHAT_FIXTURE_DOCUMENT);
+  const created = await callTool(page, {
+    agent: 'explorer', tool: 'create_directory', args: {path: directory},
+  });
+  expect(created.rawText).toMatch(/^Successfully created directory /);
+  const cleanup = observeWebchatCleanup(page, directory);
+  try {
+    const contents = await callTool(page, {
+      agent: 'explorer', tool: 'list_directory', args: {path: directory},
+      expectedRawText: EXPLORER_EMPTY_TEXT_SENTINEL,
+    });
+    expect(contents, 'a fresh project must have the exact routed empty-directory response').toEqual({
+      rawText: EXPLORER_EMPTY_TEXT_SENTINEL,
+    });
+    await run(directory);
+  } finally {
+    try {
+      await cleanup.quiesce();
+      const removed = await callTool(page, {
+        agent: 'explorer', tool: 'delete_directory', args: {path: directory},
+      });
+      expect(removed.rawText).toMatch(/^Successfully deleted directory /);
+    } finally {
+      cleanup.dispose();
+    }
+  }
 }
 
 export async function waitForWebchatIdle(page, timeout = smokeConfig.timeouts.navigation) {
@@ -32,12 +74,35 @@ export async function waitForWebchatIdle(page, timeout = smokeConfig.timeouts.na
   await expect(page.locator('#send')).toBeVisible();
 }
 
-export async function cancelWebchatGenerationIfActive(page) {
+export async function cancelWebchatGenerationIfActive(page, {timeout = smokeConfig.timeouts.navigation} = {}) {
   await page.waitForTimeout(1_000);
   const cancelButton = page.locator('#cancelBtn');
   const active = await cancelButton.isVisible({ timeout: 2_000 }).catch(() => false);
   if (!active) return;
-  await cancelButton.click();
+  const current = new URL(page.url());
+  const [response] = await Promise.all([
+    page.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return url.origin === current.origin && url.pathname === '/webchat/control'
+        && candidate.request().method() === 'POST' && candidate.request().postData() === '\x1b'
+        && url.searchParams.get('agent') === current.searchParams.get('agent')
+        && url.searchParams.get('workspace-dir') === current.searchParams.get('workspace-dir');
+    }, {timeout}),
+    cancelButton.click(),
+  ]);
+  expect(response.status(), 'WebChat cancellation must be accepted before cleanup').toBe(204);
+  let timer;
+  try {
+    const completed = await Promise.race([
+      response.finished(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('WebChat cancellation response did not finish before cleanup.')), timeout);
+      }),
+    ]);
+    expect(completed, 'WebChat cancellation response must finish before cleanup').toBeNull();
+  } finally {
+    clearTimeout(timer);
+  }
   await waitForWebchatIdle(page);
 }
 
@@ -101,6 +166,24 @@ export async function selectActiveWebchatSuggestion(page) {
   await page.keyboard.press('Enter');
 }
 
+export async function selectWebchatWorkspacePath(page, relativePath) {
+  const segments = relativePath.split('/');
+  await setComposer(page, `@${segments[0]}`);
+  for (let index = 0; index < segments.length; index += 1) {
+    const prefix = segments.slice(0, index + 1).join('/');
+    const folder = index < segments.length - 1;
+    await expectWebchatSuggestion(page, {
+      group: 'Files and folders', text: `${prefix}${folder ? '/' : ''}`,
+    });
+    const label = `${prefix}${folder ? '/' : ''}`;
+    const exactLabel = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+    await page.locator('.wa-slash-menu-item').filter({
+      has: page.locator('.wa-slash-menu-label', {hasText: exactLabel}),
+    }).click();
+    await expect(page.locator('#cmd')).toHaveValue(`@${prefix}${folder ? '/' : ' '}`);
+  }
+}
+
 async function confirmDefaultUploadDestination(page) {
   const dialog = page.getByRole('dialog', { name: 'Choose upload destination' });
   await expect(dialog).toBeVisible();
@@ -110,7 +193,7 @@ async function confirmDefaultUploadDestination(page) {
   await expect(dialog).toBeHidden();
 }
 
-export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.runId}.txt`) {
+export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.runId}.txt`, workspaceDirectory = '.') {
   const fixtureDir = testInfo.outputPath('fixtures');
   fs.mkdirSync(fixtureDir, { recursive: true });
   const filePath = path.join(fixtureDir, name);
@@ -125,13 +208,14 @@ export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.
   const { status, payload } = await responsePromise;
   expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(name);
-  expect(payload.workspacePath).toBe(name);
-  expect(payload.downloadUrl).toBe(`/workspace-files/${encodeURIComponent(name)}`);
+  const workspacePath = path.posix.join(workspaceDirectory, name);
+  expect(payload.workspacePath).toBe(workspacePath);
+  expect(payload.downloadUrl).toBe(`/workspace-files/${workspacePath.split('/').map(encodeURIComponent).join('/')}`);
   await cancelWebchatGenerationIfActive(page);
   return { filePath, name, payload };
 }
 
-export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${smokeConfig.runId}`) {
+export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${smokeConfig.runId}`, workspaceDirectory = '.') {
   const fixtureRoot = testInfo.outputPath('fixtures');
   const folderPath = path.join(fixtureRoot, folderName);
   fs.mkdirSync(path.join(folderPath, 'nested'), { recursive: true });
@@ -148,7 +232,9 @@ export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${
   const { status, payload } = await responsePromise;
   expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(relativePath);
-  expect(payload.workspacePath).toBe(relativePath);
+  const workspacePath = path.posix.join(workspaceDirectory, relativePath);
+  expect(payload.workspacePath).toBe(workspacePath);
+  expect(payload.downloadUrl).toBe(`/workspace-files/${workspacePath.split('/').map(encodeURIComponent).join('/')}`);
   await cancelWebchatGenerationIfActive(page);
   return { folderPath, folderName, relativePath, payload };
 }

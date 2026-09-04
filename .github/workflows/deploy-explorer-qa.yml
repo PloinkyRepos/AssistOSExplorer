@@ -1106,6 +1106,27 @@ jobs:
           fi
           echo "[deploy-qa] Verified Ploinky's locked achillesAgentLib/$EXPECTED_AGENTLIB_BRANCH at $EXPECTED_AGENTLIB_COMMIT."
 
+          ALA_URL='https://github.com/AssistOS-AI/AdvancedLanguageAgent.git'
+          ALA_BRANCH="$(resolve_default_branch "$ALA_URL")"
+          ALA_COMMIT="$(git ls-remote --exit-code --heads "$ALA_URL" "refs/heads/$ALA_BRANCH" | awk 'NR == 1 { print $1 }')"
+          ALA_DIR="$WORK_DIR/AdvancedLanguageAgent"
+          if [[ ! "$ALA_COMMIT" =~ ^[a-f0-9]{40}$ ]] || [ -e "$ALA_DIR" ] || [ -L "$ALA_DIR" ]; then
+            echo "[deploy-qa] ERROR: ALA requires an exact default-branch commit and an absent fresh checkout."
+            exit 1
+          fi
+          git clone --single-branch --branch "$ALA_BRANCH" "$ALA_URL" "$ALA_DIR"
+          verify_ala_checkout() {
+            if [ "$(git -C "$ALA_DIR" rev-parse HEAD)" != "$ALA_COMMIT" ] ||
+              [ "$(git -C "$ALA_DIR" branch --show-current)" != "$ALA_BRANCH" ] ||
+              [ "$(git -C "$ALA_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')" != "origin/$ALA_BRANCH" ] ||
+              [ -n "$(git -C "$ALA_DIR" status --porcelain)" ]; then
+              echo "[deploy-qa] ERROR: ALA checkout must remain clean and track the selected default-branch commit."
+              return 1
+            fi
+            echo "[deploy-qa] Verified AdvancedLanguageAgent/$ALA_BRANCH at $ALA_COMMIT."
+          }
+          verify_ala_checkout
+
           mkdir -p "$WORK_DIR/.ploinky"
           chmod 700 "$WORK_DIR/.ploinky"
           EDGE_DESIRED_FILE="$WORK_DIR/.ploinky/edge-desired.json"
@@ -1245,6 +1266,56 @@ jobs:
             echo "[deploy-qa] ERROR: exact Box instance '$BOX_INSTANCE' was not found."
             exit 1
           fi
+
+          echo "[deploy-qa] Binding ALA to the one Ploinky-selected AgentLib and checking its CLI contract..."
+          "$BOX_ENGINE" container exec -i --user podman "$BOX_INSTANCE" \
+            node --input-type=module - /workspace/AdvancedLanguageAgent /opt/ploinky-agentlib <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { spawnSync } from 'node:child_process';
+          import { pathToFileURL } from 'node:url';
+
+          const [alaRoot, selectedAgentLib] = process.argv.slice(2);
+          for (const directory of [alaRoot, selectedAgentLib]) {
+              const stat = fs.lstatSync(directory);
+              assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), 'ALA and selected AgentLib must be real directories');
+          }
+          const manifest = JSON.parse(fs.readFileSync(path.join(alaRoot, 'package.json'), 'utf8'));
+          assert.equal(manifest.name, 'advanced-language-agent');
+          assert.deepEqual(Object.keys(manifest.dependencies || {}), ['ploinky-agent-lib'], 'ALA dependency changes require deployment review');
+          const modules = path.join(alaRoot, 'node_modules');
+          try {
+              const stat = fs.lstatSync(modules);
+              assert.ok(stat.isDirectory() && !stat.isSymbolicLink(), 'ALA node_modules must be a real directory');
+          } catch (error) {
+              if (error.code !== 'ENOENT') throw error;
+              fs.mkdirSync(modules);
+          }
+          const binding = path.join(modules, 'ploinky-agent-lib');
+          try {
+              assert.ok(fs.lstatSync(binding).isSymbolicLink(), 'ALA must not install a private AgentLib copy');
+              assert.equal(fs.readlinkSync(binding), selectedAgentLib, 'ALA must use the selected AgentLib');
+          } catch (error) {
+              if (error.code !== 'ENOENT') throw error;
+              fs.symlinkSync(selectedAgentLib, binding, 'dir');
+          }
+          const { loadAchillesAgentLib } = await import(pathToFileURL(path.join(alaRoot, 'src/achilles-loader.mjs')).href);
+          const loaded = await loadAchillesAgentLib({ env: {} });
+          assert.equal(loaded.strategy, 'package', 'ALA must not shadow the selected AgentLib with another checkout');
+          assert.ok(fs.realpathSync(loaded.entry).startsWith(`${fs.realpathSync(selectedAgentLib)}${path.sep}`), 'ALA must load the selected AgentLib');
+          assert.equal(typeof loaded.module.MainAgent, 'function');
+          assert.equal(typeof loaded.module.LLMAgent, 'function');
+          const executable = path.join(alaRoot, 'bin/ala.mjs');
+          fs.accessSync(executable, fs.constants.X_OK);
+          const help = spawnSync(process.execPath, [executable, '--help'], { encoding: 'utf8', timeout: 15000 });
+          assert.equal(help.status, 0, 'ALA help must run successfully');
+          for (const option of ['--home', '--cwd', '--MCPServers']) {
+              assert.ok(help.stdout.includes(option), `ALA must support ${option}`);
+          }
+          console.log('[deploy-qa] ALA imports the selected AgentLib and supports the RoboTeam CLI contract.');
+          NODE
+          verify_ala_checkout
 
           "$BOX_ENGINE" container exec \
             --user podman \
@@ -1519,6 +1590,7 @@ jobs:
             fi
             echo "[deploy-qa] Verified $repository_name/$expected_branch at $deployed_commit."
           done
+          verify_ala_checkout
           AGENTLIB_MODE="$(
             "$BOX_ENGINE" container inspect "$BOX_INSTANCE" \
               --format '{{index .Config.Labels "io.assistos.ploinky-box.agentlib-mode"}}'

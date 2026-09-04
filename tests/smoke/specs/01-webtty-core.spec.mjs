@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import {
   acknowledgeExactPageDiagnostics,
+  assertPageDiagnosticsClean,
   attachPageDiagnostics,
   checkpointPageDiagnostics,
   expect,
@@ -29,6 +30,58 @@ import {
 } from '../lib/webtty-runtime-evidence.mjs';
 
 const execFileAsync = promisify(execFile);
+
+const explorerFiniteRequests = new WeakMap();
+
+async function observeExplorerPluginReadiness(page) {
+  const pending = new Set();
+  const observation = { pending, started: 0 };
+  explorerFiniteRequests.set(page, observation);
+  page.on('request', (request) => {
+    observation.started += 1;
+    pending.add(request);
+  });
+  page.on('requestfinished', (request) => pending.delete(request));
+  page.on('requestfailed', (request) => pending.delete(request));
+  page.on('response', (response) => {
+    // A confirmed SSE response intentionally has no finite body. Every other
+    // request stays pending through its body, including auth and image loads
+    // started by plugins outside the presenter's render promise.
+    const contentType = response.headers()['content-type']?.split(';')[0].trim().toLowerCase();
+    if (response.ok() && contentType === 'text/event-stream') pending.delete(response.request());
+  });
+  await page.addInitScript(() => {
+    window.__e2eWebttyExplorerPluginsReady = false;
+    window.addEventListener('assistos:runtime-plugins-updated', (event) => {
+      if (event.detail?.phase === 'ready') window.__e2eWebttyExplorerPluginsReady = true;
+    });
+  });
+}
+
+async function waitForExplorerPluginRender(page, timeout = smokeConfig.timeouts.navigation) {
+  // Shell readiness intentionally precedes plugin discovery. The ready event
+  // starts mounting; its presenter promise covers component HTML/CSS/modules
+  // and stays non-null until the current (possibly queued) render settles.
+  const observation = explorerFiniteRequests.get(page);
+  if (!observation) throw new Error('Explorer request observation must start before navigation.');
+  await expect.poll(async () => {
+    if (observation.pending.size) return false;
+    const started = observation.started;
+    const rendered = await page.evaluate(async () => {
+      // Body completion may queue a follow-up fetch or an image render. Cross
+      // the next render turn before sampling readiness, then reject this sample
+      // if any request started in that interval. No fixed quiet sleep is used.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!window.__e2eWebttyExplorerPluginsReady) return false;
+      const presenter = document.querySelector('file-exp')?.webSkelPresenter;
+      return Boolean(presenter) && !presenter.__appPluginRenderPromise;
+    });
+    return rendered && observation.pending.size === 0 && observation.started === started;
+  }, {
+    timeout,
+    message: 'Explorer plugin rendering and finite response bodies must settle before navigation',
+  }).toBe(true);
+}
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -558,6 +611,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
     let userContext = null;
     let foreignAdminContext = null;
     try {
+      await observeExplorerPluginReadiness(page);
       await openExplorer(page, { hash: fixture.explorerHash });
       await assertExplorerDirectory(page, fixture.parentDirectoryPath);
       const admin = await readAuthenticatedPrincipal(page, smokeConfig.primaryUser);
@@ -1270,6 +1324,15 @@ test.describe('Ploinky core WebTTY release gate', () => {
       expect(restartSleepInput).toMatchObject({ status: 200, payload: { ok: true } });
       const restartSleepPattern = new RegExp(`(?:^|\\s)sleep ${restartSleepSeconds}(?:$|\\s)`);
       await waitForAgentProcess(replacementRuntime, replacementGitAgent, restartSleepPattern, true);
+      await waitForExplorerPluginRender(page);
+      assertPageDiagnosticsClean(page, 'Explorer must be error-free before Router fault injection');
+      // Only the recovery terminal is the outage target. Stop unrelated Explorer
+      // background traffic without muting either page's diagnostic ledger.
+      await page.goto('about:blank', {waitUntil: 'load'});
+      expect(page.url()).toBe('about:blank');
+      assertPageDiagnosticsClean(page, 'quiescing Explorer must not hide browser failures');
+      const primaryRecoveryCheckpoint = checkpointPageDiagnostics(page, 'quiescent Explorer during Router recovery');
+      const explorerQuiescedAt = new Date().toISOString();
       expect(recoveryDiagnostics.actionableEvents(), 'the recovery terminal must remain error-free before Router crash').toEqual([]);
       const recoveryCheckpoint = recoveryDiagnostics.checkpoint('exact prior-epoch Router stream invalidation');
       const recovery404Console = waitForExact404Console(
@@ -1307,6 +1370,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
       }).toBe(true);
       expect(routerRecoveryFailure).toBe('');
       expect(recoveredRouter).toBeTruthy();
+      const routerRecoveredAt = new Date().toISOString();
       await waitForAgentExecDelta(
         replacementRuntime,
         replacementGitAgent,
@@ -1335,6 +1399,9 @@ test.describe('Ploinky core WebTTY release gate', () => {
         hash: fixture.explorerHash,
       });
       await assertExplorerDirectory(page, fixture.parentDirectoryPath);
+      acknowledgeExactPageDiagnostics(page, primaryRecoveryCheckpoint, []);
+      assertPageDiagnosticsClean(page, 'Explorer must reopen cleanly after verified Router recovery');
+      const explorerReopenedAt = new Date().toISOString();
       const isolationHostMarker = `box-isolation-host-${crypto.randomUUID()}`;
       const isolationBrowserMarker = `box-isolation-browser-${crypto.randomUUID()}`;
       fs.writeFileSync(
@@ -1433,6 +1500,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
           origin: firstUrl.origin,
           relativeDirectory: fixture.relativeDirectory,
           chooserAccessibleName: 'Open terminal in',
+          routerFaultIsolation: {explorerQuiescedAt, routerRecoveredAt, explorerReopenedAt},
           discoveryTargetCount: first.discovery.targets.length,
           serverDerivedRowsMatched: true,
           boxWasFirst: true,

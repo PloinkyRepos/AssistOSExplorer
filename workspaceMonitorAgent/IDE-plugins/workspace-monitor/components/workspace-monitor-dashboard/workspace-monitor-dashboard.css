@@ -122,6 +122,11 @@ workspace-monitor-dashboard .monitor-panel {
   min-height: 0;
 }
 
+workspace-monitor-dashboard [data-role="history-retry"][hidden],
+workspace-monitor-dashboard [data-role="runtime-history-retry"][hidden] {
+  display: none;
+}
+
 workspace-monitor-dashboard .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));

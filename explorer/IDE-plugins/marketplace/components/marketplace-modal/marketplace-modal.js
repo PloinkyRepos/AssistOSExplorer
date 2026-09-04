@@ -283,6 +283,7 @@ export class MarketplaceModal {
         ? String(runtime?.state?.status || (active ? 'stopped' : 'inactive')).toLowerCase()
         : 'inactive';
       if (agent.active === active && agent.status === status && agent.running === running) continue;
+      if (agent.status !== status || agent.active !== active || agent.running !== running) delete agent.statusDetail;
       agent.active = active;
       agent.status = status;
       agent.running = running;
@@ -291,6 +292,7 @@ export class MarketplaceModal {
     }
     if (changed) {
       this.syncInteractiveState();
+      this.scheduleAgentStatusRefresh();
     }
   };
 
@@ -300,26 +302,19 @@ export class MarketplaceModal {
     const row = Array.from(rows).find(candidate => candidate.dataset.marketplaceAgentRef === agentRef);
     if (!row) return;
 
-    const running = agent.running === true;
-    const statusText = running
-      ? 'running'
-      : String(agent.status || (agent.active ? 'stopped' : 'inactive')).toLowerCase();
     const status = row.querySelector('.marketplace-agent-status');
-    if (status) {
-      status.className = `marketplace-agent-status ${statusText}`;
-      status.textContent = statusText;
-    }
+    if (status) this.updateAgentStatusElement(status, agent);
 
     const settingsButton = row.querySelector('[data-agent-settings-key]');
-    if (settingsButton) {
-      settingsButton.dataset.agentRunning = running ? 'true' : 'false';
-    }
+    if (settingsButton) this.updateAgentSettingsButton(settingsButton, agent);
 
     const toggle = row.querySelector('[data-agent-ref]');
     if (toggle) {
       toggle.dataset.active = agent.active ? 'true' : 'false';
       toggle.classList.toggle('active', agent.active === true);
-      toggle.textContent = agent.active ? 'Disable' : 'Enable';
+      toggle.textContent = this.state.agentMutationBusyRef === agentRef
+        ? `${this.state.agentMutationVerb || (agent.active ? 'Disabling' : 'Enabling')}...`
+        : (agent.active ? 'Disable' : 'Enable');
     }
   }
 
@@ -781,6 +776,26 @@ export class MarketplaceModal {
     return this.getAgentLifecycleStatus(agent) === 'running' && agent?.running === true;
   }
 
+  updateAgentStatusElement(element, agent) {
+    const presentation = this.getAgentStatusPresentation(agent);
+    element.className = `marketplace-agent-status ${presentation.status}`;
+    element.textContent = presentation.label;
+    element.setAttribute('aria-label', `${this.getAgentDisplayName(agent)} status: ${presentation.label}`);
+    if (presentation.detail) element.title = presentation.detail;
+    else element.removeAttribute('title');
+  }
+
+  updateAgentSettingsButton(button, agent) {
+    const isOperational = this.isAgentOperational(agent);
+    button.dataset.agentOperational = isOperational ? 'true' : 'false';
+    button.disabled = this.state.busy
+      || !isOperational
+      || this.state.agentSettingsBusyKey === button.dataset.agentSettingsKey;
+    button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+    if (isOperational) button.removeAttribute('title');
+    else button.title = `Configure is available once ${this.getAgentDisplayName(agent)} is running.`;
+  }
+
   hasTransitionalAgents() {
     return (this.state.marketplace?.agents || []).some(agent => (
       MARKETPLACE_AGENT_TRANSITIONAL_STATUSES.has(this.getAgentLifecycleStatus(agent))
@@ -914,11 +929,7 @@ export class MarketplaceModal {
       const name = document.createElement('span');
       name.textContent = this.getAgentDisplayName(agent);
       const status = document.createElement('span');
-      const statusPresentation = this.getAgentStatusPresentation(agent);
-      status.className = `marketplace-agent-status ${statusPresentation.status}`;
-      status.textContent = statusPresentation.label;
-      status.setAttribute('aria-label', `${name.textContent} status: ${statusPresentation.label}`);
-      if (statusPresentation.detail) status.title = statusPresentation.detail;
+      this.updateAgentStatusElement(status, agent);
       title.append(name, status);
 
       const about = document.createElement('div');
@@ -953,19 +964,11 @@ export class MarketplaceModal {
       if (canManage) {
         const settingsItem = this.getAgentSettingsItem(agent);
         if (settingsItem) {
-          const isOperational = this.isAgentOperational(agent);
           const settingsButton = document.createElement('button');
           settingsButton.type = 'button';
           settingsButton.className = 'marketplace-agent-settings';
           settingsButton.dataset.agentSettingsKey = settingsItem.key;
-          settingsButton.dataset.agentOperational = isOperational ? 'true' : 'false';
-          settingsButton.disabled = this.state.busy
-            || !isOperational
-            || this.state.agentSettingsBusyKey === settingsItem.key;
-          settingsButton.setAttribute('aria-disabled', settingsButton.disabled ? 'true' : 'false');
-          if (!isOperational) {
-            settingsButton.title = `Configure is available once ${this.getAgentDisplayName(agent)} is running.`;
-          }
+          this.updateAgentSettingsButton(settingsButton, agent);
           settingsButton.textContent = 'Configure';
           controls.append(settingsButton);
         }

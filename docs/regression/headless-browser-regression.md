@@ -316,17 +316,18 @@ Preconditions:
 
 Copilot WebChat steps:
 
-1. Open the routed WebChat URL for AchillesCLI:
+1. Create a unique empty project directory with a run-scoped name through Explorer's authenticated filesystem tools. Open the routed WebChat URL for AchillesCLI with that exact workspace-relative directory:
 
    ```text
-   /webchat?agent=achilles-cli&forward-envelope=1&workspace-dir=.
+   /webchat?agent=achilles-cli&forward-envelope=1&workspace-dir=<run-scoped-project>
    ```
 
 2. Upload a file and a nested folder through the browser UI.
-3. Type the uploaded path prefix with `@` and assert the suggestion menu includes a `Files and folders` group scoped to the current upload session.
-4. Open a sibling browser context and assert the first context's upload is not suggested there.
+3. Assert each response's exact relative path, selected-project workspace path, and encoded download URL. Type the uploaded path prefix with `@` and assert the suggestion menu includes a `Files and folders` group.
+4. Open a sibling browser context at the same project directory and assert the first context's upload is suggested there. Direct-workspace uploads belong to the selected project, not a hidden session directory.
 5. Type `@op` and assert the menu does not expose an `Agents` group or `@open-interpreter` suggestion.
 6. Leave the composer text unchanged as `@op`; selecting a provider tag must not be possible from the normal WebChat autocomplete.
+7. Clean up the exact project directory through Explorer's filesystem tools. Do not raise upload quotas or broaden reserved-path exclusions to accommodate unrelated source checkouts at the workspace root.
 
 WebMeet chat steps:
 
@@ -339,7 +340,7 @@ WebMeet chat steps:
 
 Pass criteria:
 
-- WebChat exposes session-scoped `Files and folders` suggestions for uploaded paths.
+- WebChat exposes selected-project `Files and folders` suggestions for uploaded paths, including sibling sessions at the same directory.
 - WebChat and WebMeet do not expose an `Agents` group or provider suggestion for `@open-interpreter`.
 - WebMeet persists provider-looking text as ordinary meeting chat.
 - `SMOKE_OPEN_INTERPRETER=1` opt-in Copilot checks cover semantic provider dispatch when external runtime is configured.

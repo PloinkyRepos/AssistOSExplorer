@@ -76,6 +76,90 @@ function expected() {
   };
 }
 
+function isolatedContainerInspect(mediaPort = '27882') {
+  const inspection = containerInspect({
+    '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '28080' }],
+    '7882/udp': [{ HostIp: '0.0.0.0', HostPort: mediaPort }],
+  });
+  inspection[0].Config.Labels['io.assistos.ploinky-box.router-host-port'] = '28080';
+  inspection[0].Config.Labels['io.assistos.ploinky-box.media-host-port'] = mediaPort;
+  return inspection;
+}
+
+test('box evidence accepts a distinct labeled media host port while retaining the fixed UDP target', () => {
+  for (const mediaPort of ['1', '27882', '65535']) {
+    const evidence = buildBoxEvidence({
+      containerInspect: isolatedContainerInspect(mediaPort),
+      imageInspect: imageInspect(),
+      ...expected(),
+    });
+    assert.equal(evidence.selectedRouterHostPort, '28080');
+    assert.equal(evidence.semanticLabels.mediaHostPort, mediaPort);
+    assert.deepEqual(evidence.normalizedPortBindings, normalizeOuterPortBindings({
+      '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '28080' }],
+      '7882/udp': [{ HostIp: '0.0.0.0', HostPort: mediaPort }],
+    }));
+    assert.deepEqual(validateBoxEvidence(evidence, expected()), evidence);
+
+    for (const mutation of [
+      (value) => { value.semanticLabels.mediaHostPort = '7882'; },
+      (value) => { value.normalizedPortBindings['7882/udp'][0].HostPort = '7882'; },
+      (value) => { value.semanticLabels.routerHostPort = '18080'; },
+      (value) => { value.selectedRouterHostPort = '18080'; },
+    ]) {
+      const changed = structuredClone(evidence);
+      mutation(changed);
+      assert.throws(() => validateBoxEvidence(changed, expected()), /label does not match|exact two-publication/);
+    }
+  }
+});
+
+test('alternate media ports require canonical port values and the exact semantic label schema', () => {
+  for (const mediaPort of ['', '0', '-1', '65536', '027882', '27882.5', ' 27882 ', '1e4', '27882/udp', null]) {
+    assert.throws(() => buildBoxEvidence({
+      containerInspect: isolatedContainerInspect(mediaPort),
+      imageInspect: imageInspect(),
+      ...expected(),
+    }), /exact TCP\/UDP port/);
+  }
+  for (const change of [
+    (labels) => { delete labels['io.assistos.ploinky-box.media-host-port']; },
+    (labels) => { labels['unexpected-label'] = '27882'; },
+    (labels) => { labels['io.assistos.ploinky-box.agentlib-commit'] = 'bad'; },
+    (labels) => { labels['io.assistos.ploinky-box.media-host-port'] = '27883'; },
+    (labels) => { labels['io.assistos.ploinky-box.media-host-port'] = ' 27882 '; },
+  ]) {
+    const inspection = isolatedContainerInspect();
+    change(inspection[0].Config.Labels);
+    assert.throws(() => buildBoxEvidence({
+      containerInspect: inspection,
+      imageInspect: imageInspect(),
+      ...expected(),
+    }), /Box labels must be exactly|40 lowercase hexadecimal|media-host-port label/);
+  }
+});
+
+test('alternate media port evidence rejects extra mappings, wrong protocols and targets, and widened listener boundaries', () => {
+  for (const mutate of [
+    (bindings) => { bindings['8081/tcp'] = [{ HostIp: '127.0.0.1', HostPort: '28081' }]; },
+    (bindings) => { bindings['7882/udp'].push({ HostIp: '0.0.0.0', HostPort: '37882' }); },
+    (bindings) => { bindings['8080/tcp'].push({ HostIp: '127.0.0.1', HostPort: '38080' }); },
+    (bindings) => { bindings['7882/tcp'] = bindings['7882/udp']; delete bindings['7882/udp']; },
+    (bindings) => { bindings['7881/udp'] = bindings['7882/udp']; delete bindings['7882/udp']; },
+    (bindings) => { bindings['8080/tcp'][0].HostIp = '0.0.0.0'; },
+    (bindings) => { bindings['7882/udp'][0].HostIp = '127.0.0.1'; },
+    (bindings) => { bindings['7882/udp'][0].HostIp = '::'; },
+  ]) {
+    const inspection = isolatedContainerInspect();
+    mutate(inspection[0].HostConfig.PortBindings);
+    assert.throws(() => buildBoxEvidence({
+      containerInspect: inspection,
+      imageInspect: imageInspect(),
+      ...expected(),
+    }), /must contain exactly one|must equal/);
+  }
+});
+
 test('box evidence binds the exact running semantic image and normalizes only empty wildcard HostIp', () => {
   const evidence = buildBoxEvidence({
     containerInspect: containerInspect(),
@@ -300,4 +384,17 @@ test('external TCP-negative evidence is generation-, nonce-, target-, and two-ne
   successfulInvalidIce.sources[0].invalidIceProbe.outcome = 'success-response';
   successfulInvalidIce.sources[0].invalidIceProbe.successResponse = true;
   assert.throws(() => validateExternalTcpNegativeEvidence(successfulInvalidIce, tcpContext()), /invalid ICE fails/);
+});
+
+test('external scanner evidence cannot certify a Box with an alternate media host port', () => {
+  const context = tcpContext();
+  context.boxEvidence = buildBoxEvidence({
+    containerInspect: isolatedContainerInspect(),
+    imageInspect: imageInspect(),
+    ...expected(),
+  });
+  assert.throws(() => validateExternalTcpNegativeEvidence(tcpEvidence(), context), /fixed UDP host port 7882/);
+  const changedProbe = tcpEvidence();
+  changedProbe.sources[0].invalidIceProbe.targetPort = 27882;
+  assert.throws(() => validateExternalTcpNegativeEvidence(changedProbe, tcpContext()), /invalid ICE fails on UDP 7882/);
 });

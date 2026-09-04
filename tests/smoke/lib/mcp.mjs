@@ -1,5 +1,8 @@
-export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
-  return page.evaluate(async ({ agent, tool, args }) => {
+export async function callAgentToolViaRouter(page, { agent, tool, args = {}, expectedRawText }) {
+  if (expectedRawText !== undefined && typeof expectedRawText !== 'string') {
+    throw new TypeError('The expected MCP raw text must be a string.');
+  }
+  return page.evaluate(async ({ agent, tool, args, expectedRawText }) => {
     const endpoint = `/${encodeURIComponent(agent)}/mcp`;
     const proofResponse = await fetch(`/auth/token?agent=${encodeURIComponent(agent)}`, {
       method: 'GET',
@@ -68,6 +71,19 @@ export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
     }
     const result = body.result;
     const blocks = Array.isArray(result?.content) ? result.content : [];
+    if (expectedRawText !== undefined) {
+      // Validate the complete result before the ordinary decoder selects one block.
+      if (
+        !result || typeof result !== 'object' || Array.isArray(result)
+        || (result.isError !== undefined && result.isError !== false)
+        || blocks.length !== 1
+        || blocks[0]?.type !== 'text'
+        || blocks[0].text !== expectedRawText
+      ) {
+        throw new Error(`MCP tool call on ${endpoint} did not return the exact successful text result.`);
+      }
+      return { rawText: blocks[0].text };
+    }
     const jsonBlock = blocks.find((block) => block?.type === 'json' && block.json && typeof block.json === 'object');
     if (jsonBlock) return jsonBlock.json;
     const textBlock = blocks.find((block) => block?.type === 'text' && typeof block.text === 'string');
@@ -79,5 +95,5 @@ export async function callAgentToolViaRouter(page, { agent, tool, args = {} }) {
       }
     }
     return result;
-  }, { agent, tool, args });
+  }, { agent, tool, args, expectedRawText });
 }

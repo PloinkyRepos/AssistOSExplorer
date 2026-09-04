@@ -1,4 +1,4 @@
-import { callDpu, callMonitor } from './workspace-monitor-api.js';
+import { callDpu, callMonitor, historyFailureMessage } from './workspace-monitor-api.js';
 import { renderHistoryChart } from './workspace-monitor-charts.js';
 import { WorkspaceMonitorLogs } from './workspace-monitor-logs.js';
 import { runtimeIsReady, WorkspaceMonitorResources } from './workspace-monitor-resources.js';
@@ -57,10 +57,10 @@ export class WorkspaceMonitorDashboard {
     });
     this.resources = new WorkspaceMonitorResources(element, {
       onSelectionChange: () => void this.loadSelectedRuntimeHistory(),
-      onSelectionCleared: () => this.renderSelectedRuntimeHistoryUnavailable('Select a runtime to load its history.'),
+      onSelectionCleared: () => void this.loadSelectedRuntimeHistory(),
       onLiveUpdate: (date) => this.setStatus(`Live update ${date.toLocaleTimeString()}`)
     });
-    this.runtimeHistoryRequestId = 0;
+    this.unloaded = false;
     this.settings = null;
     this.history = null;
     this.invalidate();
@@ -93,7 +93,7 @@ export class WorkspaceMonitorDashboard {
     this.startOverview();
   }
 
-  afterUnload() { this.stopStreams(); }
+  afterUnload() { this.unloaded = true; this.stopStreams(); }
 
   selectTab(_target, tab) {
     this.activeTab = tab;
@@ -127,13 +127,17 @@ export class WorkspaceMonitorDashboard {
   }
 
   async loadSettingsAndHistory() {
+    const controller = this.beginHistoryRequest('settings');
     try {
-      const payload = await callMonitor('workspace_monitor_settings_get');
+      const payload = await callMonitor('workspace_monitor_settings_get', {}, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       this.settings = payload.settings;
       this.renderSettings();
       await this.loadHistory();
     } catch (error) {
-      this.renderHistoryUnavailable(error.message);
+      if (!controller.signal.aborted) this.renderHistoryUnavailable(historyFailureMessage(error), true);
+    } finally {
+      if (this.controllers.get('settings') === controller) this.controllers.delete('settings');
     }
   }
 
@@ -227,23 +231,36 @@ export class WorkspaceMonitorDashboard {
   }
 
   handleRuntimeHistoryWindowChange() {
-    const { from, to } = this.runtimeHistoryWindow();
-    const now = Date.now();
-    if (!Number.isFinite(from?.getTime()) || !Number.isFinite(to?.getTime()) || to <= from || from > now || to > now) {
-      setText(this.element, 'runtime-history-state', 'Choose a valid history interval that does not extend into the future.');
-      return;
-    }
     void this.loadSelectedRuntimeHistory();
   }
 
   handleHistoryWindowChange() {
-    const { from, to } = this.historyWindow();
-    const now = Date.now();
-    if (!Number.isFinite(from?.getTime()) || !Number.isFinite(to?.getTime()) || to <= from || from > now || to > now) {
-      setText(this.element, 'history-state', 'Choose a valid history interval that does not extend into the future.');
-      return;
-    }
     void this.loadHistory();
+  }
+
+  beginHistoryRequest(scope) {
+    this.controllers.get(scope)?.abort();
+    const controller = new AbortController();
+    this.controllers.set(scope, controller);
+    if (this.unloaded) controller.abort();
+    return controller;
+  }
+
+  isCurrentHistoryRequest(scope, controller, { from, to }, runtimeKey) {
+    const current = scope === 'runtime-history' ? this.runtimeHistoryWindow() : this.historyWindow();
+    return !controller.signal.aborted && this.controllers.get(scope) === controller
+      && current.from.getTime() === from.getTime() && current.to.getTime() === to.getTime()
+      && (scope !== 'runtime-history' || runtimeKey === this.resources.selectedKey);
+  }
+
+  setHistoryRetryVisible(role, visible) {
+    const button = this.element.querySelector(`[data-role="${role}"]`);
+    if (button) button.hidden = !visible;
+  }
+
+  retryHistory() {
+    if (this.settings) return this.loadHistory();
+    return this.loadSettingsAndHistory();
   }
 
   async saveThresholds() {
@@ -268,6 +285,9 @@ export class WorkspaceMonitorDashboard {
   }
 
   async loadHistory() {
+    if (this.unloaded) return;
+    const controller = this.beginHistoryRequest('history');
+    this.setHistoryRetryVisible('history-retry', false);
     const { from, to } = this.historyWindow();
     const now = Date.now();
     if (!Number.isFinite(from?.getTime()) || !Number.isFinite(to?.getTime()) || to <= from || from > now || to > now) {
@@ -277,16 +297,20 @@ export class WorkspaceMonitorDashboard {
     try {
       setText(this.element, 'history-state', 'Loading history…');
       const requestedPoints = Math.min(MAX_HISTORY_POINTS, Math.ceil((to - from) / 60_000) + 1);
-      this.history = await callMonitor('workspace_monitor_history_query', {
+      const history = await callMonitor('workspace_monitor_history_query', {
         from: from.toISOString(), to: to.toISOString(), maxPoints: requestedPoints
-      });
+      }, { signal: controller.signal });
+      if (!this.isCurrentHistoryRequest('history', controller, { from, to })) return;
+      this.history = history;
       this.renderHistoryCharts();
     } catch (error) {
-      this.renderHistoryUnavailable(error.message);
+      if (!this.isCurrentHistoryRequest('history', controller, { from, to })) return;
+      this.renderHistoryUnavailable(historyFailureMessage(error), true);
     }
   }
 
-  renderHistoryUnavailable(message) {
+  renderHistoryUnavailable(message, retry = false) {
+    this.setHistoryRetryVisible('history-retry', retry);
     setText(this.element, 'history-state', `History unavailable: ${message}`);
     for (const role of ['cpu-history-chart', 'memory-history-chart']) {
       const host = this.element.querySelector(`[data-role="${role}"]`);
@@ -354,6 +378,9 @@ export class WorkspaceMonitorDashboard {
   }
 
   async loadSelectedRuntimeHistory() {
+    if (this.unloaded) return;
+    const controller = this.beginHistoryRequest('runtime-history');
+    this.setHistoryRetryVisible('runtime-history-retry', false);
     const entry = this.resources.selectedEntry();
     if (!entry) {
       this.renderSelectedRuntimeHistoryUnavailable('Select a runtime to load its history.');
@@ -362,10 +389,9 @@ export class WorkspaceMonitorDashboard {
     const { from, to } = this.runtimeHistoryWindow();
     const now = Date.now();
     if (!Number.isFinite(from?.getTime()) || !Number.isFinite(to?.getTime()) || to <= from || from > now || to > now) {
-      setText(this.element, 'runtime-history-state', 'Choose a valid history interval that does not extend into the future.');
+      this.renderSelectedRuntimeHistoryUnavailable('Choose a valid history interval that does not extend into the future.');
       return;
     }
-    const requestId = ++this.runtimeHistoryRequestId;
     const cpuKey = `runtime:${entry.key}:cpu`;
     const memoryKey = `runtime:${entry.key}:memory`;
     try {
@@ -376,12 +402,12 @@ export class WorkspaceMonitorDashboard {
         to: to.toISOString(),
         maxPoints: requestedPoints,
         series: [cpuKey, memoryKey]
-      });
-      if (requestId !== this.runtimeHistoryRequestId || entry.key !== this.resources.selectedKey) return;
+      }, { signal: controller.signal });
+      if (!this.isCurrentHistoryRequest('runtime-history', controller, { from, to }, entry.key)) return;
       this.renderSelectedRuntimeHistory(entry, history, cpuKey, memoryKey);
     } catch (error) {
-      if (requestId !== this.runtimeHistoryRequestId) return;
-      this.renderSelectedRuntimeHistoryUnavailable(error.message);
+      if (!this.isCurrentHistoryRequest('runtime-history', controller, { from, to }, entry.key)) return;
+      this.renderSelectedRuntimeHistoryUnavailable(historyFailureMessage(error), true);
     }
   }
 
@@ -402,7 +428,8 @@ export class WorkspaceMonitorDashboard {
       : `${entry.name}: no persisted samples in this interval`);
   }
 
-  renderSelectedRuntimeHistoryUnavailable(message) {
+  renderSelectedRuntimeHistoryUnavailable(message, retry = false) {
+    this.setHistoryRetryVisible('runtime-history-retry', retry);
     setText(this.element, 'runtime-history-state', `History unavailable: ${message}`);
     for (const role of ['selected-runtime-cpu-history-chart', 'selected-runtime-memory-history-chart']) {
       const host = this.element.querySelector(`[data-role="${role}"]`);

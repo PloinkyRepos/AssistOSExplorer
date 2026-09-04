@@ -46,6 +46,7 @@ function broadcastAvatarSettingsUpdate(detail = {}) {
 }
 
 const AXIFACE_ASSET_BASE_URL = '/explorer/shared/vendor/axi-face';
+const AXIFACE_PACK_INDEX_URL = '/explorer/shared/generated/axi-face-packs.json';
 
 function getAxiFaceModuleUrl() {
     return `${AXIFACE_ASSET_BASE_URL}/src/axi-face.mjs`;
@@ -186,7 +187,7 @@ export async function loadAxiFaceGeneratedFacePalettes() {
 
 export async function loadAxiFacePacks() {
     if (!axiFacePacksPromise) {
-        axiFacePacksPromise = fetch(`${getAxiFaceAssetBaseUrl()}/packs/index.json`, {
+        axiFacePacksPromise = fetch(AXIFACE_PACK_INDEX_URL, {
             credentials: 'include',
             headers: { Accept: 'application/json' }
         })
