@@ -303,7 +303,12 @@ Default smoke checks:
 
 Each upload test creates a unique empty project directory through Explorer's
 authenticated filesystem MCP, selects it in both relevant WebChat contexts, and
-deletes that exact fixture through the same MCP after the test. Setup authenticates
+requires the exact `__ASSISTOS_EXPLORER_EMPTY_TEXT__` transport sentinel from its
+initial directory listing. An arbitrary empty/missing/error response is not
+accepted as proof that the fixture is empty: the MCP helper validates a sole text
+block and a successful result before decoding, so error flags or extra blocks
+cannot be discarded into a false empty-directory result. The test deletes that
+exact fixture through the same MCP during cleanup. Setup authenticates
 into an inert same-origin WebChat CSS document, without starting a root chat or
 displaying credential responses. Cleanup navigates back to that document and
 requires its successful response and exact origin/path before deleting the

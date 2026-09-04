@@ -8,6 +8,8 @@ import { smokeConfig } from './config.mjs';
 import { callAgentToolViaRouter } from './mcp.mjs';
 
 const WEBCHAT_FIXTURE_DOCUMENT = '/webchat/assets/webchat.css';
+// explorer/tools/explorer_tool.mjs preserves empty text across its stdout wire.
+const EXPLORER_EMPTY_TEXT_SENTINEL = '__ASSISTOS_EXPLORER_EMPTY_TEXT__';
 
 export function taggedWebchatPath(workspaceDirectory = '.') {
   const params = new URLSearchParams({
@@ -30,28 +32,34 @@ export async function openTaggedWebchat(page, account = smokeConfig.primaryUser,
   await waitForWebchatIdle(page);
 }
 
-export async function withWebchatUploadProject(page, run) {
+export async function withWebchatUploadProject(page, run, {
+  signInFn = signIn,
+  callTool = callAgentToolViaRouter,
+} = {}) {
   const runId = smokeConfig.runId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
   const directory = `webchat-upload-${runId}-${crypto.randomUUID()}`;
   // Use an inert same-origin document for authenticated fixture MCP calls.
   // No chat starts at the workspace root and no credential response is rendered.
-  await signIn(page, smokeConfig.primaryUser, WEBCHAT_FIXTURE_DOCUMENT);
-  const created = await callAgentToolViaRouter(page, {
+  await signInFn(page, smokeConfig.primaryUser, WEBCHAT_FIXTURE_DOCUMENT);
+  const created = await callTool(page, {
     agent: 'explorer', tool: 'create_directory', args: {path: directory},
   });
   expect(created.rawText).toMatch(/^Successfully created directory /);
   try {
-    const contents = await callAgentToolViaRouter(page, {
+    const contents = await callTool(page, {
       agent: 'explorer', tool: 'list_directory', args: {path: directory},
+      expectedRawText: EXPLORER_EMPTY_TEXT_SENTINEL,
     });
-    expect(contents.rawText).toBe('');
+    expect(contents, 'a fresh project must have the exact routed empty-directory response').toEqual({
+      rawText: EXPLORER_EMPTY_TEXT_SENTINEL,
+    });
     await run(directory);
   } finally {
     const response = await page.goto(WEBCHAT_FIXTURE_DOCUMENT, {waitUntil: 'load'});
     expect(response?.status(), 'the inert cleanup document must load successfully').toBe(200);
     expect(new URL(page.url()).origin).toBe(new URL(smokeConfig.baseURL).origin);
     expect(new URL(page.url()).pathname).toBe(WEBCHAT_FIXTURE_DOCUMENT);
-    const removed = await callAgentToolViaRouter(page, {
+    const removed = await callTool(page, {
       agent: 'explorer', tool: 'delete_directory', args: {path: directory},
     });
     expect(removed.rawText).toMatch(/^Successfully deleted directory /);
