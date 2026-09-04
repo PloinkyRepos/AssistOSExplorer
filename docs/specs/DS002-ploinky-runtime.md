@@ -43,6 +43,8 @@ Marketplace reads use the authenticated router session. Before an administrator 
 
 Repository documentation preview must remain reachable through the repository-scoped route `/.ploinky/repos/AchillesIDE/docs/development.html` when the workspace exposes the repository mount.
 
+Explorer startup loaders must wait for a reported runtime to become running before invoking its application operations. Before the first MCP handshake, the initial agent waiting route observes the authenticated same-route startup protocol (`GET /<agent>/` with `X-Ploinky-Agent-Startup-Probe: 1`) across a stable generation window. A 202 starting response does not authorize MCP initialization; ordinary inactive-route and CSRF rejection remain unchanged.
+
 Explicit local development verification uses `SMOKE_SOURCE_VERIFICATION=local-snapshot` and a separately supplied `SMOKE_LOCAL_SNAPSHOT_MANIFEST`. This mode requires the same loopback application and inspected Box origin, exact base commits, complete tracked/nonignored source-tree SHA-256 digests, the immutable Box image, and verified live source mounts and generated source links. It verifies the same identities again after the browser gate. Release remains the default and retains clean-repository checks; QA acceptance rejects local snapshot mode. See [local snapshot E2E](../regression/local-snapshot-e2e.md).
 
 ## Conclusion

@@ -106,19 +106,16 @@ test('runtime route probe requires one stable Router generation window', async (
         origin: ORIGIN,
         settleMs: 2500,
         wait: async (delayMs) => waits.push(delayMs),
-        fetchImpl: async (url) => ({
+        fetchImpl: async (url, options) => ({
             ok: true,
             status: 200,
             async json() {
                 const parsed = new URL(url);
-                assert.equal(parsed.searchParams.get('mutationRoute'), 'webmeetAgent');
-                assert.equal(parsed.searchParams.has('mutationPath'), false);
+                assert.equal(parsed.pathname, '/webmeetAgent/');
+                assert.equal(options.headers['X-Ploinky-Agent-Startup-Probe'], '1');
                 return {
-                    browserMutation: {
-                        generation: generations.shift(),
-                        routeKey: 'webmeetAgent',
-                        origin: ORIGIN
-                    }
+                    state: 'ready',
+                    generation: generations.shift()
                 };
             }
         })
@@ -139,15 +136,25 @@ test('runtime route probe retries when the Router generation changes', async () 
                 status: 200,
                 async json() {
                     return {
-                        browserMutation: {
-                            generation: generations.shift(),
-                            routeKey: 'webmeetAgent',
-                            origin: ORIGIN
-                        }
+                        state: 'ready',
+                        generation: generations.shift()
                     };
                 }
             })
         }),
         (error) => error.code === 'agent_not_ready' && /still being updated/.test(error.message)
     );
+});
+
+
+test('runtime generation probe does not treat accepted startup or login HTML as ready', async () => {
+    for (const response of [
+        { ok: true, status: 202, json: async () => ({ state: 'starting', generation: 'g1' }) },
+        { ok: true, status: 200, redirected: true, json: async () => ({ state: 'ready', generation: 'g1' }) },
+        { ok: true, status: 200, json: async () => ({ browserMutation: { generation: 'g1' } }) },
+    ]) {
+        await assert.rejects(() => probeAgentRuntimeRouteStability('AchillesCLI/achilles-cli', {
+            origin: ORIGIN, wait: async () => {}, fetchImpl: async () => response,
+        }), error => error.code === 'agent_not_ready');
+    }
 });
