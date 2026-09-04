@@ -8,6 +8,8 @@ import { startService } from '../service/index.mjs';
 import { resetStoreForTests } from '../lib/store.mjs';
 import { ensureSeedData } from '../lib/bootstrap.mjs';
 import { createProvider, resolveProviderConfig } from '../runtime/index.mjs';
+import { getUserById, getUserRoles, registerUser } from '../lib/users.mjs';
+import { issueAuthCode } from '../lib/sso.mjs';
 
 test('SSO sends browsers to the public callback origin while provider calls stay private', async () => {
     const folder = await mkdtemp(join(tmpdir(), 'userpersisto-public-login-'));
@@ -45,5 +47,58 @@ test('SSO sends browsers to the public callback origin while provider calls stay
         await resetStoreForTests();
         await rm(folder, { recursive: true, force: true });
         delete process.env.USERPERSISTO_ALLOWED_REDIRECT_ORIGINS;
+    }
+});
+
+test('provider account projections preserve optional fields and an email-only account can be promoted without adding a username', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'userpersisto-optional-username-'));
+    process.env.PERSISTENCE_FOLDER = folder;
+    process.env.USERPERSISTO_SETTINGS_KEY = 'test-optional-username-settings';
+    process.env.USERPERSISTO_RUNTIME_SECRET = 'test-optional-username-runtime';
+    let server;
+    try {
+        await ensureSeedData();
+        const owner = await registerUser({ email: 'owner@example.test', password: 'owner-password-123' });
+        const member = await registerUser({ email: 'member@example.test', password: 'member-password-123' });
+        server = startService({ port: 0, host: '127.0.0.1' });
+        if (!server.listening) await once(server, 'listening');
+        const provider = createProvider({ getConfig: async () => ({
+            routerBaseUrl: `http://127.0.0.1:${server.address().port}`,
+            loginPath: '/service/auth/', runtimePath: '/service/runtime',
+            runtimeSecret: process.env.USERPERSISTO_RUNTIME_SECRET,
+        }) });
+        const login = await provider.sso_begin_login({ redirectUri: 'http://localhost:8080/auth/callback' });
+        const issued = await issueAuthCode({ providerState: login.providerState, userId: member.user.id });
+        const session = await provider.sso_handle_callback({ providerState: login.providerState, query: { code: issued.code } });
+        assert.equal(session.user.username, '');
+        assert.equal(session.user.email, 'member@example.test');
+        assert.equal((await provider.sso_refresh_session(session)).user.username, '');
+
+        const listed = await provider.sso_admin_list_users({ actorUserId: owner.user.id });
+        const row = listed.users.find((user) => user.id === member.user.id);
+        assert.equal(row.username, '');
+        assert.equal(row.name, '');
+        assert.equal(row.displayName, '');
+        assert.deepEqual(row.roles, ['selfRegistered']);
+        const updated = await provider.sso_admin_update_user({
+            actorUserId: owner.user.id, userId: row.id,
+            username: row.username, email: row.email, name: row.name, roles: ['user'],
+        });
+        assert.equal(updated.username, '');
+        assert.equal(updated.name, '');
+        assert.deepEqual(updated.roles, ['user']);
+        assert.equal((await getUserById(row.id)).username, '');
+        assert.equal((await getUserById(row.id)).displayName, '');
+        const refreshed = await provider.sso_refresh_session(session);
+        assert.equal(refreshed.user.username, '');
+        assert.ok(refreshed.user.capabilities.includes('explorer.access'));
+        await assert.rejects(provider.sso_admin_update_user({
+            actorUserId: owner.user.id, userId: row.id, username: row.email,
+        }), (error) => error.code === 'invalid_username');
+        assert.deepEqual(await getUserRoles(row.id), ['user']);
+    } finally {
+        if (server?.listening) await new Promise((resolve) => server.close(resolve));
+        await resetStoreForTests();
+        await rm(folder, { recursive: true, force: true });
     }
 });

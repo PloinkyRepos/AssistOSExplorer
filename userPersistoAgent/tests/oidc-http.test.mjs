@@ -126,8 +126,8 @@ test('independent OIDC client discovers, authenticates with PKCE, verifies RS256
     const info = await client.fetchUserInfo(config, tokens.access_token, user.id);
     assert.equal(info.email, 'member@example.test');
     assert.equal(info.email_verified, false);
-    assert.deepEqual(info.roles, ['user']);
-    assert.ok(info.capabilities.includes('explorer.access'));
+    assert.deepEqual(info.roles, ['selfRegistered']);
+    assert.deepEqual(info.capabilities, ['selfregistered.dashboard.access']);
     assert.equal(info.passwordHash, undefined);
     resetOidcProviderForTests();
     await resetStoreForTests();
@@ -195,8 +195,14 @@ test('concurrent authorization-code redemption has exactly one success', async (
 
 test('current user roles and blocking affect UserInfo, refresh and existing SSO sessions', async () => fixture(async ({ config, user, admin }) => {
     const flow = await tokensFor(config);
+    await setUserRoles(user.id, ['user'], admin);
+    const promoted = await client.fetchUserInfo(config, flow.tokens.access_token, user.id);
+    assert.deepEqual(promoted.roles, ['user']);
+    assert.ok(promoted.capabilities.includes('explorer.access'));
     await setUserRoles(user.id, ['selfRegistered'], admin);
-    assert.deepEqual((await client.fetchUserInfo(config, flow.tokens.access_token, user.id)).roles, ['selfRegistered']);
+    const restricted = await client.fetchUserInfo(config, flow.tokens.access_token, user.id);
+    assert.deepEqual(restricted.roles, ['selfRegistered']);
+    assert.deepEqual(restricted.capabilities, ['selfregistered.dashboard.access']);
     await updateUser(user.id, { status: 'blocked' }, admin);
     await assert.rejects(client.fetchUserInfo(config, flow.tokens.access_token, user.id));
     await assert.rejects(client.refreshTokenGrant(config, flow.tokens.refresh_token));
@@ -269,7 +275,9 @@ test('OIDC registration uses normal user policy and disabled methods cannot bypa
     const flow = await begin(config);
     const callback = await complete(flow, 'new-oidc@example.test', { action: 'register' });
     const token = await client.authorizationCodeGrant(config, callback, { pkceCodeVerifier: flow.verifier, expectedState: flow.state, expectedNonce: flow.nonce });
-    assert.deepEqual((await client.fetchUserInfo(config, token.access_token, token.claims().sub)).roles, ['user']);
+    const registered = await client.fetchUserInfo(config, token.access_token, token.claims().sub);
+    assert.deepEqual(registered.roles, ['selfRegistered']);
+    assert.deepEqual(registered.capabilities, ['selfregistered.dashboard.access']);
     await updateAuthPolicy({ enabledAuthMethods: ['totp'] }, admin);
     const next = await begin(config);
     const body = await (await next.browser.fetch(next.location)).text();

@@ -10,13 +10,14 @@ process.env.USERPERSISTO_SETTINGS_KEY = 'test-settings-key';
 const { ensureSeedData } = await import('../lib/bootstrap.mjs');
 const { createUser, getSetupStatus, getUserByEmail, getUserRoles, registerUser, updateUser } = await import('../lib/users.mjs');
 const { updateAuthPolicy } = await import('../lib/policy.mjs');
+const { getUserCapabilities } = await import('../lib/authorization.mjs');
 const { resetStoreForTests } = await import('../lib/store.mjs');
 
 after(async () => {
     await resetStoreForTests();
 });
 
-test('concurrent first registrations create exactly one admin and later registrations receive the standard role', async () => {
+test('concurrent first registrations create exactly one admin and later registrations receive dashboard-only access', async () => {
     await ensureSeedData();
     assert.equal((await getSetupStatus()).needsInitialAdmin, true);
 
@@ -27,12 +28,17 @@ test('concurrent first registrations create exactly one admin and later registra
     const firstWaveRoles = await Promise.all(firstWave.map((entry) => getUserRoles(entry.user.id)));
     assert.equal(firstWave.filter((entry) => entry.firstUser).length, 1);
     assert.equal(firstWaveRoles.filter((entry) => entry.includes('admin')).length, 1);
+    assert.equal(firstWaveRoles.filter((entry) => entry.includes('selfRegistered')).length, 1);
     assert.ok(firstWave.every((entry) => entry.user.username === ''));
     assert.ok(firstWave.every((entry) => !Object.hasOwn(entry.user, 'passwordHash')));
 
-    const later = await registerUser({ email: 'member@example.com', password: 'member-pass-123' });
+    const later = await registerUser({ email: 'member@example.com', password: 'member-pass-123', username: 'admin' });
     assert.equal(later.firstUser, false);
-    assert.deepEqual(await getUserRoles(later.user.id), ['user']);
+    assert.equal(later.user.username, '');
+    assert.deepEqual(await getUserRoles(later.user.id), ['selfRegistered']);
+    assert.deepEqual(await getUserCapabilities(later.user.id), ['selfregistered.dashboard.access']);
+    const owner = firstWave.find((entry) => entry.firstUser);
+    assert.ok((await getUserCapabilities(owner.user.id)).includes('explorer.access'));
     assert.equal((await getSetupStatus()).needsInitialAdmin, false);
     assert.equal(Boolean(await getUserByEmail('owner-a@example.com')), true);
     assert.equal(Boolean(await getUserByEmail('owner-b@example.com')), true);
@@ -48,9 +54,10 @@ test('self-registration policy accepts only an existing non-admin role', async (
         (error) => error?.code === 'unknown_role'
     );
 
-    await updateAuthPolicy({ defaultRegistrationRole: 'selfRegistered' }, { actorId: 'test-admin' });
-    const registered = await registerUser({ email: 'limited@example.com', password: 'limited-pass-123' });
-    assert.deepEqual(await getUserRoles(registered.user.id), ['selfRegistered']);
+    await updateAuthPolicy({ defaultRegistrationRole: 'user' }, { actorId: 'test-admin' });
+    const registered = await registerUser({ email: 'approved@example.com', password: 'approved-pass-123' });
+    assert.deepEqual(await getUserRoles(registered.user.id), ['user']);
+    assert.ok((await getUserCapabilities(registered.user.id)).includes('explorer.access'));
 });
 
 test('admin creation validates every role before persisting the user', async () => {

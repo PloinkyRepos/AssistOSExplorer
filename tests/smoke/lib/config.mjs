@@ -54,10 +54,12 @@ export const smokeConfig = Object.freeze({
   authAgent: process.env.SMOKE_AUTH_AGENT || 'explorer',
   primaryUser: {
     username: process.env.SMOKE_USERNAME || 'admin',
+    loginEmail: process.env.SMOKE_LOGIN_EMAIL || process.env.SMOKE_USERNAME || 'admin',
     password: process.env.SMOKE_PASSWORD || 'admin',
   },
   secondaryUser: {
     username: process.env.SMOKE_SECONDARY_USERNAME || 'user',
+    loginEmail: process.env.SMOKE_SECONDARY_LOGIN_EMAIL || process.env.SMOKE_SECONDARY_USERNAME || 'user',
     password: process.env.SMOKE_SECONDARY_PASSWORD || 'user',
   },
   webchatAgent: process.env.SMOKE_WEBCHAT_AGENT || 'achilles-cli',

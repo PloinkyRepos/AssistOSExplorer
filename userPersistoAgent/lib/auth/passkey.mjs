@@ -65,12 +65,21 @@ function assertRpIdMatchesOrigin(rpId, origin) {
 }
 
 function requireClientData(response = {}, expectedType, challenge, origin) {
+    if (typeof response.clientDataJSON !== 'string' || !response.clientDataJSON) {
+        throw new Error('Invalid WebAuthn client data.');
+    }
     const clientDataBuffer = base64urlDecode(response.clientDataJSON);
+    if (base64urlEncode(clientDataBuffer) !== response.clientDataJSON) {
+        throw new Error('Invalid WebAuthn client data encoding.');
+    }
     const clientData = JSON.parse(clientDataBuffer.toString('utf8'));
+    if (!clientData || typeof clientData !== 'object' || Array.isArray(clientData)) {
+        throw new Error('Invalid WebAuthn client data.');
+    }
     if (clientData.type !== expectedType) {
         throw new Error(`Invalid WebAuthn response type: ${clientData.type || 'missing'}.`);
     }
-    if (challenge !== undefined && clientData.challenge !== challenge) {
+    if (typeof clientData.challenge !== 'string' || !clientData.challenge || (challenge !== undefined && clientData.challenge !== challenge)) {
         throw new Error('Invalid WebAuthn challenge.');
     }
     if (origin && clientData.origin !== origin) {
@@ -505,21 +514,16 @@ export async function loginVerify({ email, assertion, challengeKey, origin = '' 
     if (user.status !== 'active') {
         return { ok: false, reason: 'user_blocked' };
     }
-    const credential = assertion || {};
-    const response = credential.response || {};
-    const { clientData, clientDataBuffer } = requireClientData(response, 'webauthn.get', undefined, undefined);
-    let challengeRecord;
     try {
-        challengeRecord = await consumeChallenge({
+        const credential = assertion || {};
+        const response = credential.response || {};
+        const { clientData, clientDataBuffer } = requireClientData(response, 'webauthn.get', undefined, undefined);
+        const challengeRecord = await consumeChallenge({
             challenge: clientData.challenge,
             challengeKey,
             type: 'login',
             userId: user.id
         });
-    } catch (error) {
-        return { ok: false, reason: error.message };
-    }
-    try {
         const expectedOrigin = String(challengeRecord.metadata.origin || '');
         if (expectedOrigin) await assertBrowserOriginAllowed(expectedOrigin);
         if (origin && normalizeOrigin({ origin }) !== expectedOrigin) throw new Error('WebAuthn origin changed during login.');

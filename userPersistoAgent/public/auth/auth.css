@@ -9,6 +9,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -16,6 +20,7 @@ body {
   display: grid;
   place-items: center;
   background: #f3f5f9;
+  padding: 24px 0;
 }
 
 .userpersisto-auth-shell {
@@ -51,13 +56,16 @@ body {
   font-weight: 650;
 }
 
-.auth-panel input {
+.auth-panel input,
+.auth-panel select {
   width: 100%;
   min-height: 38px;
   border: 1px solid #cbd3df;
   border-radius: 6px;
   padding: 8px 10px;
   font: inherit;
+  background: #fff;
+  color: inherit;
 }
 
 .auth-panel button {
@@ -75,6 +83,38 @@ body {
 .auth-panel button:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+.auth-copy {
+  margin: 4px 0 8px;
+  color: #48617e;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 4px 0 0;
+  color: #48617e;
+  font-size: 0.9rem;
+}
+
+.auth-panel .auth-link {
+  min-height: 32px;
+  padding: 4px;
+  background: transparent;
+  color: #1652c7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-panel :is(input, select, button):focus-visible {
+  outline: 2px solid #1652c7;
+  outline-offset: 3px;
 }
 
 .checkbox-row {

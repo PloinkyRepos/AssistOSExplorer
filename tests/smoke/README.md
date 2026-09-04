@@ -31,27 +31,40 @@ npm run test:onlyoffice-confidential
 uses the exact Ploinky checkout mounted read-only at `/opt/ploinky`. A different
 checkout is rejected even when it happens to name the same commit.
 
-The default local-auth credentials are `admin` / `admin` and `user` / `user`. Override them with:
+The sign-in helper requires existing UserPersisto test accounts; it does not seed
+local browser credentials or create accounts. The three release gates require
+two distinct accounts. Complete the fresh
+installation's **Create admin account** flow, register the second account, and
+have the administrator grant that account the `user` role. Later public
+registration defaults to `selfRegistered`, which permits the account dashboard
+but does not permit Explorer access.
+
+`SMOKE_USERNAME` and `SMOKE_SECONDARY_USERNAME` identify the expected Router
+principals. Use each stored username when set; for an email-only account, use
+its email address. Set `SMOKE_LOGIN_EMAIL` and `SMOKE_SECONDARY_LOGIN_EMAIL`
+when the sign-in email differs from that expected username. Login emails
+otherwise default to the corresponding `SMOKE_USERNAME` value.
 
 ```bash
-SMOKE_USERNAME=admin SMOKE_PASSWORD=admin \
-SMOKE_SECONDARY_USERNAME=user SMOKE_SECONDARY_PASSWORD=user \
-SMOKE_BASE_URL=https://skills.axiologic.dev \
+SMOKE_USERNAME=owner SMOKE_LOGIN_EMAIL=owner@example.test \
+SMOKE_PASSWORD='<owner-password>' \
+SMOKE_SECONDARY_USERNAME=member SMOKE_SECONDARY_LOGIN_EMAIL=member@example.test \
+SMOKE_SECONDARY_PASSWORD='<member-password>' \
+SMOKE_BASE_URL=http://127.0.0.1:8080 \
 npm test
 ```
 
-For UserPersisto SSO, complete the fresh installation's **Create admin account**
-flow before testing, then create a second account with the `user` role. The
-default self-registration policy assigns that role to subsequent accounts.
-Use two test accounts with their optional usernames unset and pass their email
-addresses as `SMOKE_USERNAME` and `SMOKE_SECONDARY_USERNAME`, together with their
-passwords. The helper signs in through UserPersisto's password form and verifies
-the resulting Router principal; it does not create accounts during a gate.
+For UserPersisto, the helper submits credentials only to its recognized password
+form and verifies the resulting Router principal. Email is used for identity
+matching only when the returned username is empty; a returned username cannot
+be overridden by a matching email. Both accounts must have distinct immutable
+user ids and must not be guests.
 
 Run the dedicated public QA acceptance gate in headless Chromium with:
 
 ```bash
-SMOKE_USERNAME=admin SMOKE_PASSWORD='<qa-admin-password>' npm run test:qa
+SMOKE_USERNAME=admin SMOKE_LOGIN_EMAIL='<qa-admin-email>' \
+SMOKE_PASSWORD='<qa-admin-password>' npm run test:qa
 ```
 
 `test:qa` is pinned to `https://explorer-qa.axiologic.dev`. It creates two

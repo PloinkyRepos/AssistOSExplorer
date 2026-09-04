@@ -10,7 +10,7 @@ import * as totp from '../lib/auth/totp.mjs';
 import { getEnabledAuthMethods, getDefaultAuthMethod } from '../lib/auth/methods.mjs';
 import { createLoginRequest, issueAuthCode, consumeAuthCode, getSsoUser } from '../lib/sso.mjs';
 import { runTool } from '../tools/registry.mjs';
-import { getSetupStatus, registerUser, listUsers, listRoles, createUser, updateUser, setUserRoles, deactivateUser, getUserRoles } from '../lib/users.mjs';
+import { getSetupStatus, registerUser, listUsers, listRoles, createUser, updateUser, setUserRoles, deactivateUser, getUserRoles, getUserById, sanitizeUser } from '../lib/users.mjs';
 import { requireActiveActor } from '../lib/authorization.mjs';
 import { getAuthPolicy, updateAuthPolicy, isAuthMethodEnabled } from '../lib/policy.mjs';
 import { setPassword } from '../lib/auth/password.mjs';
@@ -283,15 +283,19 @@ async function handlePost(req, res, path) {
                 if (Object.prototype.hasOwnProperty.call(body, key)) patch[key] = body[key];
             }
             if (Object.prototype.hasOwnProperty.call(body, 'name')) patch.displayName = body.name;
+            // Administration addresses the persisted account regardless of its
+            // active status; only the SSO projection requires an active account.
+            const existing = await getUserById(String(body.userId || ''));
+            if (!existing) throw Object.assign(new Error('User not found.'), { code: 'user_not_found', statusCode: 404 });
             let user = Object.keys(patch).length
                 ? await updateUser(body.userId, patch, { actorId: actorUserId })
-                : (await getSsoUser(body.userId)).user;
+                : sanitizeUser(existing);
             if (Object.prototype.hasOwnProperty.call(body, 'password') && body.password) {
                 await setPassword({ userId: body.userId, newPassword: body.password, actorId: actorUserId });
             }
             const roles = Object.prototype.hasOwnProperty.call(body, 'roles')
                 ? await setUserRoles(body.userId, body.roles, { actorId: actorUserId })
-                : (await getSsoUser(body.userId)).roles;
+                : await getUserRoles(body.userId);
             return sendJson(res, 200, { ok: true, user: { ...user, roles } });
         }
         if (path === '/service/runtime/sso-admin-user-delete') {

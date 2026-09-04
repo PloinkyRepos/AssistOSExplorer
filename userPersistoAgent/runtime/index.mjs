@@ -23,7 +23,7 @@ function normalizeUser({ user, roles, capabilities }) {
     return {
         id: String(user.id),
         sub: String(user.id),
-        username: String(user.username || user.email),
+        username: String(user.username || ''),
         name: String(user.displayName || user.email),
         email: String(user.email),
         roles: Array.isArray(roles) ? roles : [],
@@ -35,9 +35,9 @@ function normalizeUser({ user, roles, capabilities }) {
 function normalizeAdminUser(user = {}) {
     return {
         id: String(user.id || ''),
-        username: String(user.username || user.email || ''),
+        username: String(user.username || ''),
         email: String(user.email || ''),
-        name: String(user.displayName || user.name || user.username || user.email || ''),
+        name: String(user.displayName || user.name || ''),
         displayName: String(user.displayName || user.name || ''),
         status: String(user.status || 'active'),
         roles: Array.isArray(user.roles) ? user.roles.map(String) : [],

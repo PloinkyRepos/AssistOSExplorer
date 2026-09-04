@@ -17,7 +17,7 @@ test('administration page controls can reach and edit users beyond the old 500-u
     panel.request = async (url, options = {}) => {
         if (options.method === 'PATCH') { mutations.push({ url, body: JSON.parse(options.body) }); return { ok: true }; }
         if (options.method === 'DELETE') { users.splice(users.findIndex((user) => url.endsWith(`/${user.id}`)), 1); return { ok: true }; }
-        if (url === panel.settingsApi) return { settings: {} };
+        assert.ok(url.startsWith(panel.apiBase), 'administration must only load the provider-backed users API');
         const params = new URL(url, 'http://localhost').searchParams;
         const start = Number(params.get('start'));
         const pageSize = Number(params.get('pageSize'));
@@ -56,4 +56,30 @@ test('administration page failure preserves current page and re-enables the cont
     assert.equal(panel.state.loading, false);
     assert.equal(panel.state.usersStart, 0);
     assert.equal(panel.state.users[0].id, 'existing');
+});
+
+test('saving an email-only account preserves empty optional profile fields while changing its role', async (t) => {
+    const previousDocument = globalThis.document;
+    globalThis.document = { createElement: () => ({ dataset: {}, innerHTML: '' }) };
+    t.after(() => {
+        if (previousDocument === undefined) delete globalThis.document;
+        else globalThis.document = previousDocument;
+    });
+    const child = new AdminUsersSettings({}, () => {});
+    const user = { id: 'USER.2', email: 'member@example.test', username: '', name: '', roles: ['selfRegistered'] };
+    const row = child.createUserRow(user);
+    const fields = [...row.innerHTML.matchAll(/<input\b[^>]*>/g)].map(([tag]) => ({
+        dataset: { field: tag.match(/data-field="([^"]+)"/)[1] },
+        value: tag.match(/value="([^"]*)"/)?.[1] || '',
+    }));
+    assert.equal(fields.find((input) => input.dataset.field === 'username').value, '');
+    assert.equal(fields.find((input) => input.dataset.field === 'name').value, '');
+    fields.push({ dataset: { field: 'roles' }, value: 'user' });
+    row.querySelectorAll = () => fields;
+    const mutations = [];
+    child.dispatch = (event, detail) => mutations.push({ event, detail });
+    await child.submitUserRowAction(row, 'save');
+    assert.deepEqual(mutations, [{ event: 'admin-users-save', detail: {
+        userId: user.id, body: { username: '', email: user.email, name: '', roles: ['user'] },
+    } }]);
 });

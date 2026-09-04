@@ -22,9 +22,7 @@ export class AdminSettingsPanel {
         this.props = props || {};
         this.agent = this.element.getAttribute('data-agent') || this.props.agent || getCurrentAgentName();
         this.apiBase = `/api/agents/${encodeURIComponent(this.agent)}/users`;
-        this.settingsApi = `/api/agents/${encodeURIComponent(this.agent)}/settings`;
         this.state = {
-            activeTab: this.element.getAttribute('data-active-tab') || 'users',
             loaded: false,
             loading: false,
             users: [],
@@ -33,7 +31,6 @@ export class AdminSettingsPanel {
             usersTotal: 0,
             usersHasMore: false,
             availableRoles: [],
-            loginBrandingName: 'Login'
         };
         this.invalidate();
     }
@@ -43,7 +40,6 @@ export class AdminSettingsPanel {
     afterRender() {
         this.cacheElements();
         this.bindEvents();
-        this.updateTabUI();
         this.pushChildState();
         if (this.element.getAttribute('data-auto-load') !== 'false') {
             this.loadPage().catch((error) => this.setStatus(error.message, 'error'));
@@ -52,10 +48,7 @@ export class AdminSettingsPanel {
 
     cacheElements() {
         this.statusEl = this.element.querySelector('[data-role="status"]');
-        this.tabButtons = Array.from(this.element.querySelectorAll('.administration-tab'));
-        this.tabPanels = Array.from(this.element.querySelectorAll('.administration-tab-panel'));
         this.usersComponent = this.element.querySelector('admin-users-settings');
-        this.brandingComponent = this.element.querySelector('admin-branding-settings');
     }
 
     bindEvents() {
@@ -72,9 +65,6 @@ export class AdminSettingsPanel {
         this.element.addEventListener('admin-users-page', (event) => {
             this.loadUsersPage(event.detail?.start).catch((error) => this.setStatus(error.message, 'error'));
         });
-        this.element.addEventListener('admin-branding-save', (event) => {
-            this.saveBranding(event.detail || {}).catch((error) => this.setStatus(error.message, 'error'));
-        });
         this.element.addEventListener('admin-settings-error', (event) => {
             this.setStatus(event.detail?.message || 'Administration action failed.', 'error');
         });
@@ -90,11 +80,7 @@ export class AdminSettingsPanel {
         this.state.loading = true;
         this.setStatus('Loading settings...');
         try {
-            const [settingsPayload, usersPayload] = await Promise.all([
-                this.request(this.settingsApi),
-                this.fetchUsersPage(this.state.usersStart)
-            ]);
-            this.state.loginBrandingName = settingsPayload.settings?.loginBrandingName || 'Login';
+            const usersPayload = await this.fetchUsersPage(this.state.usersStart);
             this.applyUsersPage(usersPayload);
             this.state.loaded = true;
             this.pushChildState();
@@ -139,20 +125,15 @@ export class AdminSettingsPanel {
     }
 
     async pushChildState() {
-        await Promise.all([
-            this.setChildState(this.usersComponent, {
-                users: this.state.users,
-                availableRoles: this.state.availableRoles,
-                start: this.state.usersStart,
-                pageSize: this.state.usersPageSize,
-                totalCount: this.state.usersTotal,
-                hasMore: this.state.usersHasMore,
-                loading: this.state.loading,
-            }),
-            this.setChildState(this.brandingComponent, {
-                loginBrandingName: this.state.loginBrandingName
-            })
-        ]);
+        await this.setChildState(this.usersComponent, {
+            users: this.state.users,
+            availableRoles: this.state.availableRoles,
+            start: this.state.usersStart,
+            pageSize: this.state.usersPageSize,
+            totalCount: this.state.usersTotal,
+            hasMore: this.state.usersHasMore,
+            loading: this.state.loading,
+        });
     }
 
     async setChildState(component, state) {
@@ -195,42 +176,9 @@ export class AdminSettingsPanel {
         await this.reloadAfterMutation();
     }
 
-    async saveBranding(detail) {
-        this.setStatus('Saving login branding...');
-        const payload = await this.request(this.settingsApi, {
-            method: 'PATCH',
-            body: JSON.stringify({
-                loginBrandingName: detail.loginBrandingName
-            })
-        });
-        this.state.loginBrandingName = payload.settings?.loginBrandingName || 'Login';
-        await this.setChildState(this.brandingComponent, {
-            loginBrandingName: this.state.loginBrandingName
-        });
-        this.setStatus('Login branding saved.', 'ok');
-    }
-
     async reloadAfterMutation() {
         this.state.loaded = false;
         await this.loadPage({ force: true });
-    }
-
-    switchAdministrationTab(_target, tab) {
-        this.state.activeTab = ['users', 'branding'].includes(tab) ? tab : 'users';
-        this.updateTabUI();
-    }
-
-    updateTabUI() {
-        this.tabButtons?.forEach((button) => {
-            const active = button.dataset.tab === this.state.activeTab;
-            button.classList.toggle('active', active);
-            button.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-        this.tabPanels?.forEach((panel) => {
-            const active = panel.dataset.panel === this.state.activeTab;
-            panel.classList.toggle('active', active);
-            panel.hidden = !active;
-        });
     }
 
     setStatus(message, kind = '') {

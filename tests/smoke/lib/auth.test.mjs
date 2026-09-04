@@ -47,6 +47,19 @@ test('authenticated principals are normalized and matched to the configured acco
   assert.equal(normalizePrincipalComponent('\uff21dmin'), 'admin');
 });
 
+test('email-only principals are matched by returned email without replacing a real username', () => {
+  const principal = validateAuthenticatedPrincipal({
+    id: 'USER.2', username: '', email: 'Member@Example.Test', roles: ['user'],
+  }, { expectedUsername: 'member@example.test' });
+  assert.equal(principal.canonicalUsername, 'member@example.test');
+  assert.throws(() => validateAuthenticatedPrincipal({
+    id: 'USER.2', username: '', email: 'member@example.test', roles: ['user'],
+  }, { expectedUsername: 'other@example.test' }), /does not match/);
+  assert.throws(() => validateAuthenticatedPrincipal({
+    id: 'USER.2', username: 'actual-name', email: 'member@example.test', roles: ['user'],
+  }, { expectedUsername: 'member@example.test' }), /does not match/);
+});
+
 test('authenticated principal verification fails closed on missing, guest, or mismatched identity', () => {
   assert.throws(() => validateAuthenticatedPrincipal(null), /no user principal/);
   assert.throws(() => validateAuthenticatedPrincipal({ id: '', username: 'user', roles: ['user'] }), /principal id/);

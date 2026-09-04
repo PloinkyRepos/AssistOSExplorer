@@ -32,13 +32,19 @@ test('sso auth code round-trip returns user with roles and capabilities', async 
     assert.ok(consumed.roles.includes('admin'));
     assert.ok(consumed.capabilities.includes('explorer.access'));
 
-    await assert.rejects(() => sso.consumeAuthCode({ providerState: request.providerState, code: issued.code }));
+    await assert.rejects(() => sso.consumeAuthCode({ providerState: request.providerState, code: issued.code }),
+        (error) => error.code === 'auth_code_consumed' && error.statusCode === 400);
+    await assert.rejects(() => sso.consumeAuthCode({ providerState: 'other-state', code: 'unknown-code' }),
+        (error) => error.code === 'auth_code_invalid' && error.statusCode === 400);
+    await assert.rejects(() => sso.issueAuthCode({ providerState: 'not-a-live-request', userId: user.id }),
+        (error) => error.code === 'login_request_invalid' && error.statusCode === 400);
 });
 
 test('getSsoUser rejects blocked users', async () => {
     const user = await createUser({ email: 'b@x.com', displayName: 'B', roles: ['user'] });
     await updateUser(user.id, { status: 'blocked' });
-    await assert.rejects(() => sso.getSsoUser(user.id));
+    await assert.rejects(() => sso.getSsoUser(user.id), (error) => error.code === 'user_not_active' && error.statusCode === 403);
+    await assert.rejects(() => sso.getSsoUser('USER.missing'), (error) => error.code === 'user_not_found' && error.statusCode === 404);
 });
 
 test('a login request can issue only one auth code under concurrency', async () => {

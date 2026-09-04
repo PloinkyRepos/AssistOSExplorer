@@ -7,7 +7,7 @@ import { chromium } from '@playwright/test';
 test('authentication visits only its final surface and preserves a separate service login', { timeout: 60_000 }, async (t) => {
   const requests = [];
   const localAccount = { username: 'fixture-user', password: 'fixture-password' };
-  const providerAccount = { username: 'fixture-user@example.test', password: 'fixture-password' };
+  const providerAccount = { username: 'fixture-user', loginEmail: 'fixture-user@example.test', password: 'fixture-password' };
   const providerPath = '/base-agent-additional-server/userPersistoAgent/7000/service/auth/';
   const providerAssets = new Map(['index.html', 'main.js', 'auth-api.js', 'auth.css'].map((name) => [
     name,
@@ -27,7 +27,7 @@ test('authentication visits only its final surface and preserves a separate serv
       const authenticated = incoming.headers.cookie?.includes('fixture-session=authenticated');
       response.writeHead(authenticated ? 200 : 401, { 'content-type': 'application/json' });
       response.end(JSON.stringify(authenticated
-        ? { user: { id: 'local:fixture-user', username: account.username, roles: ['user'] } }
+        ? { user: { id: 'USER.2', username: account.username.includes('@') ? '' : account.username, email: account.loginEmail || account.username, roles: ['user'] } }
         : { error: 'unauthenticated' }));
       return;
     }
@@ -56,7 +56,7 @@ test('authentication visits only its final surface and preserves a separate serv
         const chunks = [];
         for await (const chunk of incoming) chunks.push(chunk);
         const payload = JSON.parse(Buffer.concat(chunks).toString());
-        if (payload.email !== account.username || payload.password !== account.password
+        if (payload.email !== (account.loginEmail || account.username) || payload.password !== account.password
           || payload.requestId !== 'fixture-state' || payload.state !== 'fixture-state') {
           response.writeHead(401, { 'content-type': 'application/json' });
           response.end(JSON.stringify({ ok: false, error: 'authentication_failed' }));
@@ -113,12 +113,14 @@ test('authentication visits only its final surface and preserves a separate serv
   let browser;
   try {
     browser = await chromium.launch();
-    for (const mode of ['local', 'immediate SSO', 'delayed frontend SSO']) {
+    for (const mode of ['local', 'immediate SSO', 'delayed frontend SSO', 'email-only SSO']) {
       const useSso = mode !== 'local';
       await t.test(`${mode} sign-in`, async () => {
         sso = useSso;
         redirectDelay = mode === 'delayed frontend SSO' ? 250 : 0;
-        account = useSso ? providerAccount : localAccount;
+        account = mode === 'email-only SSO'
+          ? { username: providerAccount.loginEmail, password: providerAccount.password }
+          : useSso ? providerAccount : localAccount;
         requests.length = 0;
         const context = await browser.newContext({ baseURL });
         const page = await context.newPage();

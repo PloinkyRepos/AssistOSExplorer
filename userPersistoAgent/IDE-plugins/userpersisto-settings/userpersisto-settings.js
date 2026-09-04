@@ -334,7 +334,7 @@ export class UserpersistoSettings {
                 if (input) input.checked = enabled.has(method);
             }
             if (this.selfRegistrationInput) this.selfRegistrationInput.checked = policy.selfRegistrationEnabled !== false;
-            if (this.defaultRegistrationRoleInput) this.defaultRegistrationRoleInput.value = policy.defaultRegistrationRole || "user";
+            if (this.defaultRegistrationRoleInput) this.defaultRegistrationRoleInput.value = policy.defaultRegistrationRole || "selfRegistered";
             if (this.allowedRedirectOriginsInput) this.allowedRedirectOriginsInput.value = (policy.allowedRedirectOrigins || []).join("\n");
         } catch (error) {
             this.setStatus(error?.message || "Failed to load authentication policy.", "error");
@@ -353,7 +353,7 @@ export class UserpersistoSettings {
             await this.callTool("userpersisto_auth_policy_set", {
                 enabledAuthMethods,
                 selfRegistrationEnabled: this.selfRegistrationInput?.checked === true,
-                defaultRegistrationRole: this.defaultRegistrationRoleInput?.value || "user",
+                defaultRegistrationRole: this.defaultRegistrationRoleInput?.value || "selfRegistered",
                 allowedRedirectOrigins: String(this.allowedRedirectOriginsInput?.value || "")
                     .split(/\r?\n|,/)
                     .map((value) => value.trim())

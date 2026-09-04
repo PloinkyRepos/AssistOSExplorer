@@ -122,7 +122,7 @@ test('administration mutation does not retry a non-CSRF rejection', async (t) =>
     assert.equal(calls.length, 1);
 });
 
-test('public user and branding mutations use credentials without the local-control header', async (t) => {
+test('public user mutations use credentials without the local-control header', async (t) => {
     const { calls, getProofCalls } = installRequestMocks(t, { mode: 'public' });
     const { AdminSettingsPanel } = await loadAdminSettingsPanel();
     const panel = Object.create(AdminSettingsPanel.prototype);
@@ -131,11 +131,10 @@ test('public user and branding mutations use credentials without the local-contr
         ['POST', '/api/agents/explorer/users'],
         ['PATCH', '/api/agents/explorer/users/local%3Auser'],
         ['DELETE', '/api/agents/explorer/users/local%3Auser'],
-        ['PATCH', '/api/agents/explorer/settings']
     ]) {
         await panel.request(path, { method, body: method === 'DELETE' ? undefined : '{}' });
     }
-    assert.equal(getProofCalls(), 4);
+    assert.equal(getProofCalls(), 3);
     for (const call of calls) {
         assert.equal(call.credentials, 'include');
         assert.equal(call.headers['x-ploinky-csrf-token'], undefined);

@@ -5,7 +5,7 @@ const AUTH_METHODS = new Set(['password', 'emailCode', 'passkey', 'totp']);
 const DEFAULT_POLICY = Object.freeze({
     enabledAuthMethods: ['password'],
     selfRegistrationEnabled: true,
-    defaultRegistrationRole: 'user',
+    defaultRegistrationRole: 'selfRegistered',
     allowedRedirectOrigins: [],
 });
 
@@ -49,7 +49,7 @@ function normalizePolicy(input = {}) {
     if (!methods.length) {
         throw policyError('auth_method_required', 'At least one supported authentication method must be enabled.');
     }
-    const defaultRegistrationRole = String(input.defaultRegistrationRole || 'user').trim();
+    const defaultRegistrationRole = String(input.defaultRegistrationRole || 'selfRegistered').trim();
     if (!defaultRegistrationRole) {
         throw policyError('registration_role_required', 'defaultRegistrationRole is required.');
     }

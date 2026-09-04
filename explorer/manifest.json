@@ -46,7 +46,6 @@
     "routerAccess": {
         "requiredCapability": "explorer.access",
         "capabilityDeniedRedirect": "/base-agent-additional-server/userPersistoAgent/7000/service/dashboard/",
-        "localAuthRoles": ["admin", "user"],
         "httpRoutes": [
             {
                 "path": "/shared/*",

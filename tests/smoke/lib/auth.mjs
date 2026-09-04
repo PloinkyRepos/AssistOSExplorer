@@ -19,7 +19,7 @@ export function validateAuthenticatedPrincipal(user, { expectedUsername } = {}) 
     throw new Error('The authenticated identity endpoint returned no user principal.');
   }
   const canonicalId = normalizePrincipalComponent(user.id, 'authenticated principal id');
-  const canonicalUsername = normalizePrincipalComponent(user.username, 'authenticated principal username');
+  const canonicalUsername = normalizePrincipalComponent(user.username || user.email, 'authenticated principal username or email');
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => normalizePrincipalComponent(role, 'authenticated principal role'))
     : [];
@@ -66,6 +66,7 @@ export async function readAuthenticatedPrincipal(page, account) {
         ? {
             id: payload.user.id,
             username: payload.user.username,
+            email: payload.user.email,
             roles: payload.user.roles,
           }
         : null,
@@ -129,7 +130,7 @@ export async function signIn(
     if (!await passwordForm.isVisible()) {
       throw new Error('UserPersisto password sign-in is unavailable. Complete installation setup before running smoke tests.');
     }
-    await passwordForm.locator('input[name="email"]').fill(account.username);
+    await passwordForm.locator('input[name="email"]').fill(account.loginEmail || account.username);
     await passwordForm.locator('input[name="password"]').fill(account.password);
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'load' }).catch(() => null),

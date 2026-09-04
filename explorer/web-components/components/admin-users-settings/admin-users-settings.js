@@ -136,7 +136,7 @@ export class AdminUsersSettings {
         tr.dataset.userId = user.id;
         const formId = escapeAttr(this.getUserFormId(user));
         tr.innerHTML = `
-            <td data-label="Username"><input class="form-input" form="${formId}" data-field="username" value="${escapeAttr(user.username)}"></td>
+            <td data-label="Username"><input class="form-input" form="${formId}" data-field="username" value="${escapeAttr(user.username || '')}" placeholder="Optional"></td>
             <td data-label="Email"><input class="form-input" form="${formId}" data-field="email" type="email" value="${escapeAttr(user.email || '')}"></td>
             <td data-label="Name"><input class="form-input" form="${formId}" data-field="name" value="${escapeAttr(user.name || user.displayName || '')}"></td>
             <td data-label="Roles">
