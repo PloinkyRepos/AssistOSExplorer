@@ -80,6 +80,14 @@ test('npm WebTTY core profile owns the exact Chromium release gate', () => {
     /waitForEvent\('requestfailed'|response\.finished|acknowledgeOneOfExact/,
   );
   assert.match(webttySpec, /exact prior-epoch Router stream invalidation/);
+  const quiesceIndex = webttySpec.indexOf("await page.goto('about:blank'");
+  const crashIndex = webttySpec.indexOf('const crashedRouter = crashExactRoutingServer(');
+  const recoveredIndex = webttySpec.indexOf('expect(recoveredRouter).toBeTruthy()');
+  const reopenedIndex = webttySpec.indexOf('acknowledgeExactPageDiagnostics(page, primaryRecoveryCheckpoint, [])');
+  assert.ok(quiesceIndex > 0 && quiesceIndex < crashIndex, 'unrelated Explorer traffic stops before the exact Router crash');
+  assert.ok(crashIndex < recoveredIndex && recoveredIndex < reopenedIndex, 'Explorer reopens only after verified Router recovery');
+  assert.match(webttySpec.slice(quiesceIndex - 120, quiesceIndex), /background traffic without muting/);
+  assert.doesNotMatch(webttySpec.slice(quiesceIndex, reopenedIndex), /\.pause\(|setExpectedOffline\(true\)/);
   const replacementVictimIndex = webttySpec.indexOf('const replacementVictim = await openTerminalFromExplorer(');
   const replacementChooserIndex = webttySpec.indexOf('const replacementChooser = await openTerminalChooser(');
   assert.ok(replacementVictimIndex >= 0, 'the replacement victim must be launched through Explorer');

@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import {
   acknowledgeExactPageDiagnostics,
+  assertPageDiagnosticsClean,
   attachPageDiagnostics,
   checkpointPageDiagnostics,
   expect,
@@ -1270,6 +1271,14 @@ test.describe('Ploinky core WebTTY release gate', () => {
       expect(restartSleepInput).toMatchObject({ status: 200, payload: { ok: true } });
       const restartSleepPattern = new RegExp(`(?:^|\\s)sleep ${restartSleepSeconds}(?:$|\\s)`);
       await waitForAgentProcess(replacementRuntime, replacementGitAgent, restartSleepPattern, true);
+      assertPageDiagnosticsClean(page, 'Explorer must be error-free before Router fault injection');
+      // Only the recovery terminal is the outage target. Stop unrelated Explorer
+      // background traffic without muting either page's diagnostic ledger.
+      await page.goto('about:blank', {waitUntil: 'load'});
+      expect(page.url()).toBe('about:blank');
+      assertPageDiagnosticsClean(page, 'quiescing Explorer must not hide browser failures');
+      const primaryRecoveryCheckpoint = checkpointPageDiagnostics(page, 'quiescent Explorer during Router recovery');
+      const explorerQuiescedAt = new Date().toISOString();
       expect(recoveryDiagnostics.actionableEvents(), 'the recovery terminal must remain error-free before Router crash').toEqual([]);
       const recoveryCheckpoint = recoveryDiagnostics.checkpoint('exact prior-epoch Router stream invalidation');
       const recovery404Console = waitForExact404Console(
@@ -1307,6 +1316,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
       }).toBe(true);
       expect(routerRecoveryFailure).toBe('');
       expect(recoveredRouter).toBeTruthy();
+      const routerRecoveredAt = new Date().toISOString();
       await waitForAgentExecDelta(
         replacementRuntime,
         replacementGitAgent,
@@ -1335,6 +1345,9 @@ test.describe('Ploinky core WebTTY release gate', () => {
         hash: fixture.explorerHash,
       });
       await assertExplorerDirectory(page, fixture.parentDirectoryPath);
+      acknowledgeExactPageDiagnostics(page, primaryRecoveryCheckpoint, []);
+      assertPageDiagnosticsClean(page, 'Explorer must reopen cleanly after verified Router recovery');
+      const explorerReopenedAt = new Date().toISOString();
       const isolationHostMarker = `box-isolation-host-${crypto.randomUUID()}`;
       const isolationBrowserMarker = `box-isolation-browser-${crypto.randomUUID()}`;
       fs.writeFileSync(
@@ -1433,6 +1446,7 @@ test.describe('Ploinky core WebTTY release gate', () => {
           origin: firstUrl.origin,
           relativeDirectory: fixture.relativeDirectory,
           chooserAccessibleName: 'Open terminal in',
+          routerFaultIsolation: {explorerQuiescedAt, routerRecoveredAt, explorerReopenedAt},
           discoveryTargetCount: first.discovery.targets.length,
           serverDerivedRowsMatched: true,
           boxWasFirst: true,

@@ -1,11 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 import { expect } from './fixtures.mjs';
 import { signIn } from './auth.mjs';
 import { smokeConfig } from './config.mjs';
+import { callAgentToolViaRouter } from './mcp.mjs';
 
-export function taggedWebchatPath() {
+const WEBCHAT_FIXTURE_DOCUMENT = '/webchat/assets/webchat.css';
+
+export function taggedWebchatPath(workspaceDirectory = '.') {
   const params = new URLSearchParams({
     agent: smokeConfig.webchatAgent,
     'research-tags': '1',
@@ -14,16 +18,44 @@ export function taggedWebchatPath() {
     'tag-relay-submit-tool': 'research_task_submit',
     'tag-relay-list-tool': 'research_relay_list_backends',
     'tag-relay-tags': 'open-interpreter',
-    'workspace-dir': '.',
+    'workspace-dir': workspaceDirectory,
   });
   return `/webchat?${params.toString()}`;
 }
 
-export async function openTaggedWebchat(page, account = smokeConfig.primaryUser) {
-  await signIn(page, account, taggedWebchatPath());
+export async function openTaggedWebchat(page, account = smokeConfig.primaryUser, workspaceDirectory = '.') {
+  await signIn(page, account, taggedWebchatPath(workspaceDirectory));
   await expect(page.locator('#cmd')).toBeVisible();
   await cancelWebchatGenerationIfActive(page);
   await waitForWebchatIdle(page);
+}
+
+export async function withWebchatUploadProject(page, run) {
+  const runId = smokeConfig.runId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const directory = `webchat-upload-${runId}-${crypto.randomUUID()}`;
+  // Use an inert same-origin document for authenticated fixture MCP calls.
+  // No chat starts at the workspace root and no credential response is rendered.
+  await signIn(page, smokeConfig.primaryUser, WEBCHAT_FIXTURE_DOCUMENT);
+  const created = await callAgentToolViaRouter(page, {
+    agent: 'explorer', tool: 'create_directory', args: {path: directory},
+  });
+  expect(created.rawText).toMatch(/^Successfully created directory /);
+  try {
+    const contents = await callAgentToolViaRouter(page, {
+      agent: 'explorer', tool: 'list_directory', args: {path: directory},
+    });
+    expect(contents.rawText).toBe('');
+    await run(directory);
+  } finally {
+    const response = await page.goto(WEBCHAT_FIXTURE_DOCUMENT, {waitUntil: 'load'});
+    expect(response?.status(), 'the inert cleanup document must load successfully').toBe(200);
+    expect(new URL(page.url()).origin).toBe(new URL(smokeConfig.baseURL).origin);
+    expect(new URL(page.url()).pathname).toBe(WEBCHAT_FIXTURE_DOCUMENT);
+    const removed = await callAgentToolViaRouter(page, {
+      agent: 'explorer', tool: 'delete_directory', args: {path: directory},
+    });
+    expect(removed.rawText).toMatch(/^Successfully deleted directory /);
+  }
 }
 
 export async function waitForWebchatIdle(page, timeout = smokeConfig.timeouts.navigation) {
@@ -110,7 +142,7 @@ async function confirmDefaultUploadDestination(page) {
   await expect(dialog).toBeHidden();
 }
 
-export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.runId}.txt`) {
+export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.runId}.txt`, workspaceDirectory = '.') {
   const fixtureDir = testInfo.outputPath('fixtures');
   fs.mkdirSync(fixtureDir, { recursive: true });
   const filePath = path.join(fixtureDir, name);
@@ -125,13 +157,14 @@ export async function uploadOneFile(page, testInfo, name = `smoke-${smokeConfig.
   const { status, payload } = await responsePromise;
   expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(name);
-  expect(payload.workspacePath).toBe(name);
-  expect(payload.downloadUrl).toBe(`/workspace-files/${encodeURIComponent(name)}`);
+  const workspacePath = path.posix.join(workspaceDirectory, name);
+  expect(payload.workspacePath).toBe(workspacePath);
+  expect(payload.downloadUrl).toBe(`/workspace-files/${workspacePath.split('/').map(encodeURIComponent).join('/')}`);
   await cancelWebchatGenerationIfActive(page);
   return { filePath, name, payload };
 }
 
-export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${smokeConfig.runId}`) {
+export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${smokeConfig.runId}`, workspaceDirectory = '.') {
   const fixtureRoot = testInfo.outputPath('fixtures');
   const folderPath = path.join(fixtureRoot, folderName);
   fs.mkdirSync(path.join(folderPath, 'nested'), { recursive: true });
@@ -148,7 +181,9 @@ export async function uploadFolder(page, testInfo, folderName = `smoke-folder-${
   const { status, payload } = await responsePromise;
   expect(status, `WebChat upload failed: ${payload?.error || 'unknown error'}`).toBe(201);
   expect(payload.relativePath).toBe(relativePath);
-  expect(payload.workspacePath).toBe(relativePath);
+  const workspacePath = path.posix.join(workspaceDirectory, relativePath);
+  expect(payload.workspacePath).toBe(workspacePath);
+  expect(payload.downloadUrl).toBe(`/workspace-files/${workspacePath.split('/').map(encodeURIComponent).join('/')}`);
   await cancelWebchatGenerationIfActive(page);
   return { folderPath, folderName, relativePath, payload };
 }

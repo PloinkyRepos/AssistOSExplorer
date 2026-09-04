@@ -69,6 +69,12 @@ export function checkpointPageDiagnostics(page, label) {
   });
 }
 
+export function assertPageDiagnosticsClean(page, label = 'browser console, page, or network errors') {
+  const controllers = [...(diagnosticControllers.get(page) || [])];
+  if (controllers.length === 0) throw new Error('the page has no attached diagnostic controller');
+  for (const controller of controllers) expect(controller.actionableEvents(), label).toEqual([]);
+}
+
 export function acknowledgeExactPageDiagnostics(page, checkpoint, expectedSignatures) {
   if (checkpoint?.page !== page || !Array.isArray(checkpoint?.entries)) {
     throw new Error('the diagnostic checkpoint does not belong to this page');

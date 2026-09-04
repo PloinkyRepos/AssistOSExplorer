@@ -31,6 +31,8 @@ WebTTY is a Ploinky core Router surface rather than an Explorer agent dependency
 
 Marketplace reads use the authenticated router session. Before an administrator installs or uninstalls a repository or enables or disables an agent, Explorer must obtain the local, session-bound administrative control proof from the router, verify that its origin exactly matches the current browser origin, and send it with the Marketplace mutation. Explorer must not persist this proof in component state or weaken the router check when the proof is absent or invalid. Only one agent mutation may be pending at a time; runtime-mode selection remains a stable native control, and mutation failures stay visible until explicitly dismissed. Marketplace normalizes runtime evidence to Disabled, Starting up, Running, Stopped, Failed, Paused, or Unknown; it refreshes Starting up agents and exposes Configure only for a verified Running runtime.
 
+Marketplace initial rendering, snapshot refreshes, and incremental runtime events must share the same normalized labels, accessible status, current lifecycle detail, and operational Configure gate. Leaving Running must disable Configure immediately, and streamed changes must preserve pending mutation text and existing row controls. Details from an earlier lifecycle must not remain attached to a new state.
+
 Repository documentation preview must remain reachable through the repository-scoped route `/.ploinky/repos/AchillesIDE/docs/development.html` when the workspace exposes the repository mount.
 
 ## Conclusion

@@ -274,6 +274,14 @@ The Box generation must be fresh, but its prebuilt image may be older only when
 the gate binds the exact container name, immutable image ID/reference, and
 read-only mounted Ploinky candidate derived from `SMOKE_PLOINKY_BIN`.
 
+The intentional Router crash targets the recovery terminal, not unrelated
+Explorer background traffic. The gate first requires clean primary-page
+diagnostics, navigates that Explorer page to `about:blank`, and keeps the
+terminal's exact prior-epoch transport-error oracle active. Only after a new
+Router identity and healthy authenticated endpoint are verified does it reopen
+Explorer and require clean diagnostics again. Evidence records the quiesce,
+Router recovery, and Explorer reopen timestamps; no global error filter is used.
+
 The listener gate always requires `required-loopback`, requires exactly one
 listener for each eligible `required-assigned-managed-gateway`, and requires no
 listener for an `inactive-unassigned-managed-gateway`. The inactive state
@@ -287,11 +295,29 @@ Default smoke checks:
 
 - Router auth, root landing, Explorer shell, and WebChat shell.
 - WebChat file and folder uploads through the browser.
-- WebChat upload containment evidence from the upload response: `uploads/<sessionId>/...`.
-- Session-scoped WebChat `@` file suggestions by comparing two browser contexts.
+- WebChat direct-workspace upload containment: exact `relativePath`, selected-project `workspacePath`, and encoded `/workspace-files/` download URL.
+- WebChat `@` file suggestions shared by sibling sessions opened at the same selected project directory.
 - WebChat provider-looking `@open-interpreter` text is not offered as a dispatch suggestion.
 - WebMeet room creation, two-account join, chat delivery, and cleanup.
 - WebMeet provider-looking `@open-interpreter` text stays ordinary meeting chat.
+
+Each upload test creates a unique empty project directory through Explorer's
+authenticated filesystem MCP, selects it in both relevant WebChat contexts, and
+deletes that exact fixture through the same MCP after the test. Setup authenticates
+into an inert same-origin WebChat CSS document, without starting a root chat or
+displaying credential responses. Cleanup navigates back to that document and
+requires its successful response and exact origin/path before deleting the
+project, so no active WebChat page watches a removed working directory. Browser
+diagnostics remain enabled throughout. Ordinary source
+checkouts at the workspace root must not determine the upload fixture's quota
+usage. The production file-count/byte quotas and reserved-path exclusions remain
+unchanged.
+
+The Marketplace lifecycle test controls both the Marketplace snapshot and the
+runtime NDJSON stream with one synthetic lifecycle. It verifies Starting up,
+Running, Stopped, and Disabled, including labels, accessibility, Configure and
+runtime-mode readiness. This is UI lifecycle evidence, not proof that the mocked
+agent was actually started or stopped.
 
 Opt-in checks:
 
