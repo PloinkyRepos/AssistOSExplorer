@@ -60,6 +60,33 @@ test('email-only principals are matched by returned email without replacing a re
   }, { expectedUsername: 'member@example.test' }), /does not match/);
 });
 
+test('UserPersisto login email proves the configured account without replacing its username', () => {
+  const principal = validateAuthenticatedPrincipal({
+    id: 'USER.2', username: 'persisted-profile', email: 'Member@Example.Test', roles: ['user'],
+  }, {
+    expectedUsername: 'configured-account-label',
+    expectedEmail: ' member@example.test ',
+  });
+  assert.deepEqual(principal, {
+    canonicalId: 'user.2',
+    canonicalUsername: 'persisted-profile',
+    roles: ['user'],
+  });
+
+  assert.throws(() => validateAuthenticatedPrincipal({
+    id: 'USER.2', username: 'persisted-profile', email: 'member@example.test', roles: ['user'],
+  }, {
+    expectedUsername: 'configured-account-label',
+    expectedEmail: 'other@example.test',
+  }), /does not match/);
+  assert.throws(() => validateAuthenticatedPrincipal({
+    id: 'USER.2', username: 'member@example.test', email: 'actual@example.test', roles: ['user'],
+  }, {
+    expectedUsername: 'configured-account-label',
+    expectedEmail: 'member@example.test',
+  }), /does not match/, 'the configured login email must match the returned email field');
+});
+
 test('authenticated principal verification fails closed on missing, guest, or mismatched identity', () => {
   assert.throws(() => validateAuthenticatedPrincipal(null), /no user principal/);
   assert.throws(() => validateAuthenticatedPrincipal({ id: '', username: 'user', roles: ['user'] }), /principal id/);

@@ -14,20 +14,39 @@ export function normalizePrincipalComponent(value, name = 'authenticated princip
   return normalized;
 }
 
-export function validateAuthenticatedPrincipal(user, { expectedUsername } = {}) {
+export function validateAuthenticatedPrincipal(user, { expectedUsername, expectedEmail } = {}) {
   if (!user || typeof user !== 'object' || Array.isArray(user)) {
     throw new Error('The authenticated identity endpoint returned no user principal.');
   }
   const canonicalId = normalizePrincipalComponent(user.id, 'authenticated principal id');
-  const canonicalUsername = normalizePrincipalComponent(user.username || user.email, 'authenticated principal username or email');
+  const returnedUsername = String(user.username || '').trim()
+    ? normalizePrincipalComponent(user.username, 'authenticated principal username')
+    : '';
+  const returnedEmail = String(user.email || '').trim()
+    ? normalizePrincipalComponent(user.email, 'authenticated principal email')
+    : '';
+  const canonicalUsername = returnedUsername
+    || normalizePrincipalComponent(returnedEmail, 'authenticated principal username or email');
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => normalizePrincipalComponent(role, 'authenticated principal role'))
     : [];
   if (roles.includes('guest') || canonicalId === 'guest' || canonicalId.startsWith('guest:')) {
     throw new Error('The authenticated identity endpoint returned a guest principal.');
   }
-  if (expectedUsername !== undefined && canonicalUsername !== normalizePrincipalComponent(expectedUsername, 'configured account username')) {
-    throw new Error('The authenticated principal does not match the configured account username.');
+  const configuredUsername = expectedUsername === undefined
+    ? ''
+    : normalizePrincipalComponent(expectedUsername, 'configured account username');
+  const configuredEmail = expectedEmail === undefined
+    ? ''
+    : normalizePrincipalComponent(expectedEmail, 'configured account login email');
+  const usernameMatches = configuredUsername && (
+    returnedUsername
+      ? returnedUsername === configuredUsername
+      : returnedEmail === configuredUsername
+  );
+  const emailMatches = configuredEmail && returnedEmail === configuredEmail;
+  if ((configuredUsername || configuredEmail) && !usernameMatches && !emailMatches) {
+    throw new Error('The authenticated principal does not match the configured account identity.');
   }
   return Object.freeze({ canonicalId, canonicalUsername, roles: Object.freeze(roles) });
 }
@@ -75,7 +94,10 @@ export async function readAuthenticatedPrincipal(page, account) {
   if (!result?.ok) {
     throw new Error(`Authenticated identity verification failed with HTTP ${Number(result?.status || 0) || 'unknown'}.`);
   }
-  return validateAuthenticatedPrincipal(result.user, { expectedUsername: account?.username });
+  return validateAuthenticatedPrincipal(result.user, {
+    expectedUsername: account?.username,
+    expectedEmail: account?.loginEmail,
+  });
 }
 
 export async function hasAuthenticatedSession(request) {

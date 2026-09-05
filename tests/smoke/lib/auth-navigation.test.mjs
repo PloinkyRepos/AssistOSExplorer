@@ -20,6 +20,7 @@ test('authentication visits only its final surface and preserves a separate serv
   let loginOrigin = '';
   let needsInitialAdmin = false;
   let returnTo = '';
+  let principalUsername = '';
   const server = http.createServer(async (incoming, response) => {
     const url = new URL(incoming.url, 'http://fixture.invalid');
     requests.push({ method: incoming.method, pathname: url.pathname });
@@ -27,7 +28,7 @@ test('authentication visits only its final surface and preserves a separate serv
       const authenticated = incoming.headers.cookie?.includes('fixture-session=authenticated');
       response.writeHead(authenticated ? 200 : 401, { 'content-type': 'application/json' });
       response.end(JSON.stringify(authenticated
-        ? { user: { id: 'USER.2', username: account.username.includes('@') ? '' : account.username, email: account.loginEmail || account.username, roles: ['user'] } }
+        ? { user: { id: 'USER.2', username: principalUsername || (account.username.includes('@') ? '' : account.username), email: account.loginEmail || account.username, roles: ['user'] } }
         : { error: 'unauthenticated' }));
       return;
     }
@@ -113,21 +114,24 @@ test('authentication visits only its final surface and preserves a separate serv
   let browser;
   try {
     browser = await chromium.launch();
-    for (const mode of ['local', 'immediate SSO', 'delayed frontend SSO', 'email-only SSO']) {
+    for (const mode of ['local', 'immediate SSO', 'delayed frontend SSO', 'email-only SSO', 'SSO profile username differs']) {
       const useSso = mode !== 'local';
       await t.test(`${mode} sign-in`, async () => {
         sso = useSso;
         redirectDelay = mode === 'delayed frontend SSO' ? 250 : 0;
+        principalUsername = mode === 'SSO profile username differs' ? 'persisted-profile' : '';
         account = mode === 'email-only SSO'
           ? { username: providerAccount.loginEmail, password: providerAccount.password }
-          : useSso ? providerAccount : localAccount;
+          : mode === 'SSO profile username differs'
+            ? { ...providerAccount, username: 'configured-account-label' }
+            : useSso ? providerAccount : localAccount;
         requests.length = 0;
         const context = await browser.newContext({ baseURL });
         const page = await context.newPage();
         try {
           const target = '/service/?source=smoke#requested-tab';
           const principal = await signIn(page, account, target, { requireConfiguredPrincipal: true });
-          assert.equal(principal.canonicalUsername, account.username);
+          assert.equal(principal.canonicalUsername, principalUsername || account.username);
           assert.equal(page.url(), `${baseURL}${target}`);
           assert.equal(requests.filter((entry) => entry.pathname === '/service/').length, 1,
             'the target must not boot before login or be reloaded after login');
@@ -150,7 +154,11 @@ test('authentication visits only its final surface and preserves a separate serv
           assert.equal(await page.locator('input[name="username"]').inputValue(), '');
           assert.equal(await page.locator('input[name="email"]').inputValue(), '');
           assert.equal(await page.locator('input[name="password"]').inputValue(), '');
-          await assert.rejects(signIn(page, { ...account, username: 'another-user' }, '/service/', {
+          await assert.rejects(signIn(page, {
+            ...account,
+            username: 'another-user',
+            ...(useSso ? { loginEmail: 'another-user@example.test' } : {}),
+          }, '/service/', {
             requireConfiguredPrincipal: true,
           }), /does not match the configured account/);
         } finally {
@@ -164,6 +172,7 @@ test('authentication visits only its final surface and preserves a separate serv
           sso = true;
           redirectDelay = delay;
           account = providerAccount;
+          principalUsername = '';
           needsInitialAdmin = scenario === 'initial setup';
           loginPath = scenario === 'different same-origin path' ? '/other-service/auth/' : providerPath;
           loginOrigin = scenario === 'different origin' ? baseURL.replace('127.0.0.1', 'localhost') : '';

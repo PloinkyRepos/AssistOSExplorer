@@ -40,10 +40,10 @@ registration defaults to `selfRegistered`, which permits the account dashboard
 but does not permit Explorer access.
 
 `SMOKE_USERNAME` and `SMOKE_SECONDARY_USERNAME` identify the expected Router
-principals. Use each stored username when set; for an email-only account, use
-its email address. Set `SMOKE_LOGIN_EMAIL` and `SMOKE_SECONDARY_LOGIN_EMAIL`
-when the sign-in email differs from that expected username. Login emails
-otherwise default to the corresponding `SMOKE_USERNAME` value.
+usernames when known. Set `SMOKE_LOGIN_EMAIL` and
+`SMOKE_SECONDARY_LOGIN_EMAIL` to the UserPersisto sign-in emails; these are
+independent account selectors and may differ from the stored usernames. Login
+emails otherwise default to the corresponding `SMOKE_USERNAME` value.
 
 ```bash
 SMOKE_USERNAME=owner SMOKE_LOGIN_EMAIL=owner@example.test \
@@ -55,10 +55,12 @@ npm test
 ```
 
 For UserPersisto, the helper submits credentials only to its recognized password
-form and verifies the resulting Router principal. Email is used for identity
-matching only when the returned username is empty; a returned username cannot
-be overridden by a matching email. Both accounts must have distinct immutable
-user ids and must not be guests.
+form and verifies the resulting Router principal. A returned username matches
+only the configured username, and a returned email matches only the configured
+login email; either exact normalized field match identifies the configured
+account. The returned username remains the canonical principal label when it is
+present. Both accounts must have distinct immutable user ids and canonical
+principal labels and must not be guests.
 
 Run the dedicated public QA acceptance gate in headless Chromium with:
 
