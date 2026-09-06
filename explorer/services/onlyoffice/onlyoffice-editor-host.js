@@ -1,5 +1,9 @@
 let nextEditorHostId = 0;
 
+// Native connection, recovery and session-expiry warnings retire an editor
+// just like onError. Ordinary document warnings do not end its editing cycle.
+const INACTIVE_EDITOR_WARNINGS = new Set([-100, -101, -104, -120, -121, -122]);
+
 function ensureRuntimeState(host) {
     if (!host.__onlyOfficeRuntime) {
         host.__onlyOfficeRuntime = {
@@ -232,6 +236,9 @@ export async function renderOnlyOfficeEditor(host, config) {
     const callerOnError = typeof config?.events?.onError === 'function'
         ? config.events.onError
         : null;
+    const callerOnWarning = typeof config?.events?.onWarning === 'function'
+        ? config.events.onWarning
+        : null;
     const mountConfig = {
         ...cloneConfigValue(config),
         events: {
@@ -241,6 +248,13 @@ export async function renderOnlyOfficeEditor(host, config) {
                     runtime.inactiveRenderGeneration = renderGeneration;
                 }
                 return callerOnError?.apply(this, args);
+            },
+            onWarning(...args) {
+                if (runtime.renderGeneration === renderGeneration
+                    && INACTIVE_EDITOR_WARNINGS.has(args[0]?.data?.warningCode)) {
+                    runtime.inactiveRenderGeneration = renderGeneration;
+                }
+                return callerOnWarning?.apply(this, args);
             }
         }
     };

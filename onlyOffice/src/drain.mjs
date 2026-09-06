@@ -112,7 +112,8 @@ export async function drainOnlyOfficeSessions({
     throw new Error('OnlyOffice drain deadline has expired.');
   }
   const activeSessions = sessionStore.listActiveSessions().filter((session) => (
-    session.canWrite && session.documentAccessedAt
+    session.canWrite && session.documentAccessedAt && !session.drainAcknowledgedAt
+    && ![2, 4].includes(session.callbackAcknowledgement?.status)
   ));
   const pending = new Map();
 

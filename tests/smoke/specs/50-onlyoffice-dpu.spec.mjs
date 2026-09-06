@@ -402,8 +402,29 @@ test.describe('DPU and OnlyOffice @external', () => {
 
       const reopenedSnapshot = readDpuObjectSnapshot(createdObjectId);
       expect(reopenedSnapshot?.blobSha256).toBe(drainSnapshot.blobSha256);
+      expect(await frameBodyText(reopenedFrame)).not.toMatch(/server backup copy|not saved to storage/i);
+      const continuationMarker = `OnlyOffice-continued-${smokeConfig.runId}`;
+      diagnostics.setPhase('continued-edit-after-restart');
+      await typeDocumentMarker(page, reopenedFrame, continuationMarker);
+      await forceSaveDocument(reopenedFrame);
+      let continuationSnapshot;
+      await expect.poll(() => {
+        continuationSnapshot = readDpuObjectSnapshot(createdObjectId);
+        return dpuSnapshotPersistenceAdvanced(drainSnapshot, continuationSnapshot);
+      }, {
+        timeout: smokeConfig.timeouts.navigation,
+        message: 'The reopened editor must save further edits to durable DPU storage.',
+      }).toBe(true);
+      await page.reload();
+      await assertExplorerDirectory(page, '/Confidential/My Space');
+      const continuedFrame = await openDocumentFromExplorer(page, documentPath);
+      activeEditorFrame = continuedFrame;
+      await expect.poll(() => readOnlyOfficeDocumentText(continuedFrame), {
+        timeout: smokeConfig.timeouts.navigation,
+      }).toContain(continuationMarker);
+      expect(await frameBodyText(continuedFrame)).not.toMatch(/server backup copy|not saved to storage/i);
       await failureCollector.required('OnlyOffice success screenshot', () => (
-        attachOnlyOfficeDocumentScreenshot(reopenedFrame, testInfo, 'onlyoffice-success')
+        attachOnlyOfficeDocumentScreenshot(continuedFrame, testInfo, 'onlyoffice-success')
       ));
       await testInfo.attach('onlyoffice-release-evidence.json', {
         body: Buffer.from(JSON.stringify({
@@ -438,6 +459,8 @@ test.describe('DPU and OnlyOffice @external', () => {
             code: restartResult.code,
           },
           reopenedBlobSha256: reopenedSnapshot.blobSha256,
+          continuationBlobSha256: continuationSnapshot.blobSha256,
+          continuedEditSavedAndReopened: true,
           markersObservedAfterRestart: {
             explicitSaveMarker: reopenedText.includes(marker),
             outstandingMarker: reopenedText.includes(drainMarker),
@@ -467,6 +490,14 @@ test.describe('DPU and OnlyOffice @external', () => {
         cleanupTarget: { documentPath },
         cleanup: async () => {
           createdObjectId ||= findDpuObjectByName(fileName, preExistingIds)?.id || null;
+          // Complete the native save/disconnect handshake before deleting the
+          // callback's storage target. This second restart also exercises drain
+          // after recovery, including retired keys from the first generation.
+          if (createdObjectId && activeEditorFrame && !activeEditorFrame.isDetached()) {
+            const finalDrain = await restartOnlyOffice(ploinkyExecutable);
+            expect(finalDrain.stderr).not.toMatch(/failed to (?:restart|start)|managed restart failed/i);
+            expect(finalDrain.stdout).toMatch(/✓ Agent restarted(?: \([^)]+\))?\./);
+          }
           const result = await deleteConfidentialDocument(page, documentPath, createdObjectId);
           return { documentPath, objectId: createdObjectId, ...result };
         },

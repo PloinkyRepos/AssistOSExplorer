@@ -32,6 +32,45 @@ function createHost() {
     };
 }
 
+test('native disconnect warnings retire only their current editor and preserve ordinary warnings', async () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const mounted = [];
+    const observed = [];
+    try {
+        globalThis.window = { DocsAPI: { DocEditor: class {
+            constructor(_id, config) { mounted.push(config); }
+            destroyEditor() {}
+        } } };
+        globalThis.document = { createElement: () => ({ className: '', id: '' }) };
+        for (const code of [-100, -101, -104, -120, -121, -122, -62, 500]) {
+            const host = createHost();
+            const config = {
+                document: { key: `session-${code}`, title: 'report.docx', fileType: 'docx' },
+                documentServerUrl: 'http://office.test',
+                events: { onWarning(event) { observed.push({ receiver: this, event }); } },
+            };
+            await renderOnlyOfficeEditor(host, config);
+            const oldMount = mounted.at(-1);
+            const receiver = { code };
+            const event = { data: { warningCode: code } };
+            oldMount.events.onWarning.call(receiver, event);
+            assert.deepEqual(observed.at(-1), { receiver, event });
+            const ordinary = [-62, 500].includes(code);
+            assert.equal(isOnlyOfficeEditorActive(host, config), ordinary, `warning ${code}`);
+            const next = { ...config, document: { ...config.document, key: `next-${code}` } };
+            await renderOnlyOfficeEditor(host, next);
+            oldMount.events.onWarning(event);
+            assert.equal(isOnlyOfficeEditorActive(host, next), true, 'old events cannot retire a new session');
+        }
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window;
+        else globalThis.window = originalWindow;
+        if (originalDocument === undefined) delete globalThis.document;
+        else globalThis.document = originalDocument;
+    }
+});
+
 test('a superseded async OnlyOffice mount cannot instantiate a stale editor', async () => {
     const originalWindow = globalThis.window;
     const originalDocument = globalThis.document;

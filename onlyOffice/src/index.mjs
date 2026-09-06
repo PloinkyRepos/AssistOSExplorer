@@ -534,6 +534,7 @@ export async function startOnlyOfficeAgent({
       try {
         await drainOnlyOfficeSessions({ config, sessionStore, deadline, now });
         await disconnectOnlyOfficeEditors({ editorSockets, deadline, now });
+        sessionStore.acknowledgeDrainedEditors();
         // Graceful delivery has closed every upgraded editor. Retire residual
         // HTTP connections so incomplete requests cannot block listener close.
         for (const socket of editorConnections) {

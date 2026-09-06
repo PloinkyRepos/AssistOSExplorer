@@ -198,6 +198,7 @@ test('failed drain keeps storage and DocumentServer alive and reports failure', 
     },
   });
 
+  runtime.sessionStore.acknowledgeDrainedEditors = () => { throw new Error('failed drain must not retire editor sessions'); };
   await assert.rejects(() => runtime.stop(), /callback acknowledgement missing/);
   assert.equal(serverFactory.records[0].closed, true, 'control listener stops admitting new sessions');
   assert.equal(serverFactory.records[2].closed, true, 'editor listener stops admitting new sessions');
@@ -282,10 +283,18 @@ test('active editor socket cannot block force-save drain before targeted restart
       disconnected = true;
     },
   });
+  let acknowledged = false;
+  runtime.sessionStore.acknowledgeDrainedEditors = () => {
+    assert.equal(drained, true);
+    assert.equal(disconnected, true);
+    assert.equal(activeSocket.destroyed, true);
+    acknowledged = true;
+  };
   runtime.editorServer.emit('connection', activeSocket);
   runtime.editorServer.emit('upgrade', {}, activeSocket, Buffer.alloc(0));
 
   await runtime.stop();
+  assert.equal(acknowledged, true);
 
   assert.equal(drained, true);
   assert.equal(activeSocket.destroyed, true);
@@ -321,7 +330,10 @@ test('failed graceful editor shutdown retains storage and DocumentServer and can
   });
   runtime.editorServer.emit('connection', activeSocket);
   runtime.editorServer.emit('upgrade', {}, activeSocket, Buffer.alloc(0));
+  let acknowledged = false;
+  runtime.sessionStore.acknowledgeDrainedEditors = () => { acknowledged = true; };
   await assert.rejects(() => runtime.stop(), /native disconnect deadline expired/);
+  assert.equal(acknowledged, false);
   assert.equal(documentServerStops, 0);
   assert.equal(serverFactory.records[1].closed, false);
   assert.equal(activeSocket.destroyed, false);
@@ -329,6 +341,7 @@ test('failed graceful editor shutdown retains storage and DocumentServer and can
   runtime.editorServer.close = () => { throw new Error('editor listener was closed twice'); };
   await runtime.stop();
   await runtime.stop();
+  assert.equal(acknowledged, true);
   assert.equal(attempts, 2);
   assert.equal(documentServerStops, 1);
   assert.equal(serverFactory.records[1].closed, true);

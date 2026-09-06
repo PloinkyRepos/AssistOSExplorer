@@ -11,7 +11,7 @@ Explorer presents compatible Office documents while the onlyOffice agent owns th
 
 ## Core Content
 
-Explorer must request an OnlyOffice session only for supported Office document types and must invalidate a cached session when the selected file changes. Explorer must not construct DocumentServer credentials, impersonate a callback, or treat a stale editor URL as reusable.
+Explorer must request an OnlyOffice session only for supported Office document types and must invalidate a cached session when the selected file changes. Explorer must not construct DocumentServer credentials, impersonate a callback, or treat a stale editor URL as reusable. Only a mounted active editor may retain its configuration; matching file metadata and an unexpired token do not authorize remounting a closed document key. Native disconnection, backup-copy, and session-expiry warnings retire the current editor generation, preserve caller warning handlers, and cannot invalidate a newer render. Reopening must request a fresh authenticated session and support further durable edits.
 
 The onlyOffice agent must own session construction, signed editor transport, callback validation, and its persisted session metadata. Explorer must preserve the DPU authorization boundary before requesting a session for a DPU-backed document.
 
