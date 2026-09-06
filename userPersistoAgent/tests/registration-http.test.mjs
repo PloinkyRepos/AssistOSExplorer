@@ -20,6 +20,17 @@ test('HTTP registration rejects invalid passwords before claiming first owner, a
         server = startService({ port: 0, host: '127.0.0.1' });
         if (!server.listening) await once(server, 'listening');
         const base = `http://127.0.0.1:${server.address().port}`;
+        for (const payload of [null, [], 'credentials', 42, true]) {
+            for (const route of ['register', 'password/login']) {
+                const response = await fetch(`${base}/service/auth/${route}`, {
+                    method: 'POST', headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                assert.equal(response.status, 400, 'credential endpoints require a JSON object');
+                assert.equal((await response.json()).error, 'invalid_json');
+                assert.equal((await getSetupStatus()).needsInitialAdmin, true);
+            }
+        }
         const request = await createLoginRequest({ redirectUri: `${base}/auth/callback` });
         const post = (password) => fetch(`${base}/service/auth/register`, {
             method: 'POST', headers: { 'content-type': 'application/json' },

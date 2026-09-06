@@ -53,11 +53,16 @@ async function readJson(req) {
     if (!text.trim()) {
         return {};
     }
+    let body;
     try {
-        return JSON.parse(text);
+        body = JSON.parse(text);
     } catch {
-        throw Object.assign(new Error('invalid JSON body'), { statusCode: 400 });
+        throw Object.assign(new Error('invalid JSON body'), { code: 'invalid_json', statusCode: 400 });
     }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw Object.assign(new Error('JSON object required'), { code: 'invalid_json', statusCode: 400 });
+    }
+    return body;
 }
 
 function sendJson(res, status, body) {
