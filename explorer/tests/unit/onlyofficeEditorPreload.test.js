@@ -44,3 +44,23 @@ test('superseded preload failure cannot reject after another session becomes cur
   assert.equal(oldOutcome.ok,true,'obsolete image failure leaked into superseded render result');
  }finally{f.restore();}
 });
+
+
+test('an async editor mount retains its original configuration when caller state changes during script loading', async () => {
+ const f = fixture();
+ const mutable = { ...config, document: { ...config.document } };
+ try {
+  const mounting = renderOnlyOfficeEditor(f.host, mutable).then(() => ({ ok: true }), error => ({ ok: false, message: error.message }));
+  // Presenter state is live: selecting/reloading a file can clear it while
+  // loadScript yields, even when the editor API is already cached.
+  mutable.documentServerUrl = '';
+  mutable.document.key = 'changed';
+  await tick();
+  if (f.images[0]) f.images[0].onload();
+  const result = await mounting;
+  assert.equal(result.ok, true, result.message);
+  assert.equal(f.images.length, 1);
+  assert.equal(f.images[0].src, base + '/9.3.1-build/web-apps/apps/common/main/resources/img/controls/warnings_s.svg');
+  assert.equal(isOnlyOfficeEditorActive(f.host, config), true);
+ } finally { f.restore(); }
+});

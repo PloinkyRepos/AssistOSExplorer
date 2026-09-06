@@ -206,6 +206,9 @@ export async function preloadOnlyOfficeStatusAsset(host, documentServerUrl, {
 
 export async function renderOnlyOfficeEditor(host, config) {
     if (!host) return;
+    // Presenter state can change while script loading yields. Keep the key,
+    // transport, and event handlers bound to one synchronous mount snapshot.
+    config = cloneConfigValue(config);
     const runtime = ensureRuntimeState(host);
     const nextConfigKey = buildConfigKey(config);
     if (isOnlyOfficeEditorActive(host, config)) {
